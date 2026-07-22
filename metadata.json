@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise KYC Management System",
+  "description": "Enterprise Financial KYC System with Microsoft 365, SharePoint Online, Power Platform CMS, Dynamic Form Builder, Document Management, Purview Security, Workflow & Audit Engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
