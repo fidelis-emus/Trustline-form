@@ -261,7 +261,8 @@ export interface SharedLink {
   id: string;
   token: string;
   title: string;
-  linkType: 'Public KYC Form' | 'Client Record Access' | 'Document Vault Download' | 'Custom Portal Link';
+  linkType: 'Public KYC Form' | 'Client Record Access' | 'Document Vault Download' | 'Custom Portal Link' | 'Restricted Role Link';
+  targetRole?: RoleType | 'Customer';
   clientId?: string;
   recipientName?: string;
   createdBy: string;
@@ -277,12 +278,18 @@ export interface SharedLink {
   isActive: boolean;
   
   // Super Admin Approval & Privilege Restrictions
-  isApproved: boolean; // Must be true to open link, otherwise shows pending approval warning!
+  isApproved: boolean; // Must be true to open link, otherwise shows access restricted warning!
   approvedBy?: string;
   approvedAt?: string;
   canFillForm?: boolean;
   canViewRecords?: boolean;
   canDownloadDocs?: boolean;
+  canEditClients?: boolean;
+  canApproveReject?: boolean;
+  canPrintForm?: boolean;
+  canEditCMS?: boolean;
+  canViewAuditLogs?: boolean;
+  assignedPermissions?: Partial<Record<PermissionKey, boolean>>;
 }
 
 export type PermissionKey = 

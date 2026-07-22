@@ -97,15 +97,15 @@ export const Navbar: React.FC = () => {
             <span className="hidden sm:inline">Generate Form Link</span>
           </button>
 
-          {/* Active Role Selector with URL Indicator */}
-          <div className="flex items-center space-x-2 bg-slate-800/60 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60">
+          {/* Active Role Selector with URL Path Routing */}
+          <div className="hidden items-center space-x-2 bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/80 shadow-sm">
             <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <div className="flex flex-col">
-              <div className="flex items-center space-x-1">
-                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider leading-none">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[9px] uppercase font-extrabold text-slate-400 tracking-wider leading-none">
                   Active Role
                 </span>
-                <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1 rounded border border-emerald-500/20">
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30 font-bold">
                   {activeRole === 'Super Admin' && '/superadmin'}
                   {activeRole === 'Relationship Manager' && '/relationship'}
                   {activeRole === 'Operations' && '/operations'}
@@ -115,11 +115,11 @@ export const Navbar: React.FC = () => {
               <select
                 value={activeRole}
                 onChange={(e) => setActiveRole(e.target.value as RoleType)}
-                className="bg-transparent text-xs font-semibold text-emerald-300 focus:outline-none cursor-pointer pr-1"
+                className="bg-transparent text-xs font-bold text-emerald-300 focus:outline-none cursor-pointer pr-1 mt-0.5"
               >
                 {roles.map(r => (
-                  <option key={r} value={r} className="bg-slate-900 text-slate-200">
-                    {r} {r === 'Super Admin' ? '(/superadmin)' : r === 'Relationship Manager' ? '(/relationship)' : r === 'Operations' ? '(/operations)' : '(/compliance)'}
+                  <option key={r} value={r} className="bg-slate-900 text-slate-200 font-semibold">
+                    {r} ({r === 'Super Admin' ? '/superadmin' : r === 'Relationship Manager' ? '/relationship' : r === 'Operations' ? '/operations' : '/compliance'})
                   </option>
                 ))}
               </select>
@@ -155,7 +155,7 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Generate Form Link Modal */}
+      {/* Generate Form Link Modal - Customer / Client Form ONLY */}
       {showLinkModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className={`w-full max-w-lg p-6 rounded-2xl border space-y-5 shadow-2xl ${
@@ -164,22 +164,22 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center justify-between border-b pb-3 border-slate-800">
               <div className="flex items-center space-x-2 text-emerald-400 font-bold text-base">
                 <Link2 className="w-5 h-5" />
-                <h3>Customer Public KYC Form Link</h3>
+                <h3>Customer / Client Public Form Link</h3>
               </div>
               <button 
                 onClick={() => setShowLinkModal(false)}
-                className="text-slate-400 hover:text-slate-200 p-1"
+                className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
-              Send this link to clients or customers. When they open it, they will see <strong>ONLY</strong> the clean KYC enrollment form to fill out and submit directly to your backend dashboard.
+              Generate and share this direct enrollment link with prospective customers or clients. When opened, it displays <strong>ONLY the clean, standalone Customer KYC Form</strong> for self-service onboarding and document submission.
             </p>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-300">Generated Customer Form Link:</label>
+              <label className="block text-xs font-bold text-slate-300">Generated Customer KYC Form URL:</label>
               <div className="flex items-center space-x-2">
                 <input
                   type="text"
@@ -191,50 +191,28 @@ export const Navbar: React.FC = () => {
                 />
                 <button
                   onClick={handleCopyLink}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 transition-all shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 transition-all shrink-0 shadow-md shadow-emerald-600/20"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+                  <span>{copied ? 'Copied!' : 'Copy Form Link'}</span>
                 </button>
               </div>
             </div>
 
-            {/* Role-Separated Portal URLs Section */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-bold text-slate-300">Separated Role Portal URLs:</label>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  { role: 'Super Admin', path: '/superadmin' },
-                  { role: 'Relationship Manager', path: '/relationship' },
-                  { role: 'Operations', path: '/operations' },
-                  { role: 'Compliance', path: '/compliance' }
-                ].map(item => (
-                  <button
-                    key={item.path}
-                    onClick={() => {
-                      setActiveRole(item.role as RoleType);
-                      setShowLinkModal(false);
-                    }}
-                    className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-colors flex flex-col justify-between"
-                  >
-                    <span className="text-[10px] text-slate-400 font-medium">{item.role}</span>
-                    <span className="font-mono font-bold text-emerald-400 text-xs">{item.path}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 space-y-1">
-              <span className="font-bold block">Instant Backend Sync:</span>
-              <p className="text-[11px] text-slate-300">
-                Any submission completed by a customer via this form automatically registers into your Client Records & Workflow Approval queue in real time.
+              <span className="font-bold flex items-center space-x-1.5">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>Instant Customer Form Deployment:</span>
+              </span>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Customer submissions made via this link update immediately into your backend Workflow Approval queue in real time without exposing internal role panels.
               </p>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
               <button
                 onClick={handleOpenCustomerView}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center space-x-1.5"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Test Standalone Customer View</span>
@@ -242,7 +220,7 @@ export const Navbar: React.FC = () => {
 
               <button
                 onClick={() => setShowLinkModal(false)}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
               >
                 Done
               </button>

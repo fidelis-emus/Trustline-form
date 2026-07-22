@@ -14,7 +14,9 @@ import {
   FileText,
   Printer,
   Copy,
-  Check
+  Check,
+  MessageSquare,
+  Phone
 } from 'lucide-react';
 
 export const PublicKYCForm: React.FC = () => {
@@ -271,6 +273,53 @@ export const PublicKYCForm: React.FC = () => {
             <span className="font-bold">Security Notice:</span> Enforced by Enterprise Compliance & DLP
           </div>
         </div>
+      </div>
+
+      {/* WhatsApp Direct Relationship Assistance Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-900 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl my-4">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-lg border border-emerald-300/40">
+            <MessageSquare className="w-6 h-6 fill-white" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h3 className="font-bold text-sm text-emerald-100">Need help filling out your KYC Form?</h3>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 animate-pulse">
+                Live RM Support
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Connect directly with our Relationship Manager on WhatsApp for immediate form submission assistance.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="https://wa.me/2348106318408?text=Hello%20Relationship%20Manager%2C%20I%20am%20filling%20out%20the%20KYC%20Form%20and%20need%20assistance."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-5 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs flex items-center space-x-2 transition-all shadow-lg hover:shadow-emerald-500/20 shrink-0 border border-white/20"
+        >
+          <MessageSquare className="w-4 h-4 fill-white" />
+          <span>Chat on WhatsApp</span>
+        </a>
+      </div>
+
+      {/* Floating WhatsApp Chat Widget */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <a
+          href="https://wa.me/2348106318408?text=Hello%20Relationship%20Manager%2C%20I%20am%20filling%20out%20the%20KYC%20Form%20and%20need%20assistance."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center space-x-2.5 px-4 py-3 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs shadow-2xl transition-all transform hover:scale-105 border-2 border-white/30 group"
+          title="Chat directly with Relationship Manager on WhatsApp"
+        >
+          <div className="relative">
+            <MessageSquare className="w-5 h-5 fill-white" />
+            <span className="absolute -top-1 -right-1 h-3 w-3 bg-white rounded-full animate-ping" />
+          </div>
+          <span className="font-bold text-xs tracking-wide">WhatsApp Assistance</span>
+        </a>
       </div>
 
       {/* Form Body */}

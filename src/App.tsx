@@ -2,6 +2,7 @@ import React from 'react';
 import { KYCProvider, useKYC } from './context/KYCContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { ShieldAlert } from 'lucide-react';
 
 // Screen Imports
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
@@ -30,8 +31,11 @@ import { ReportsDashboard } from './components/reports/ReportsDashboard';
 import { NotificationCenter } from './components/notifications/NotificationCenter';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, themeMode, branding } = useKYC();
+  const { activeTab, setActiveTab, themeMode, branding, activeRole, permissions } = useKYC();
   const isDark = themeMode === 'dark';
+
+  const rolePerms = permissions[activeRole] || permissions['Super Admin'];
+  const isSuperAdmin = activeRole === 'Super Admin';
 
   // Check if opening direct shareable customer form link or shared token link
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -105,7 +109,74 @@ const MainLayout: React.FC = () => {
       );
     }
 
-    // If approved, render based on link type: if 'Client Record Access', show client records; otherwise, show public form
+    // If approved, render based on link targetRole and granted privileges
+    const roleTitle = activeLink?.targetRole || (activeLink?.canViewRecords ? 'Restricted Access' : 'Customer Form');
+
+    if (activeLink?.targetRole === 'Compliance') {
+      return (
+        <div className={`min-h-screen font-sans ${
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        }`}>
+          <div className="bg-purple-950/90 border-b border-purple-800/80 px-4 py-2 text-xs text-purple-300 flex items-center justify-between">
+            <span className="font-bold">✓ Compliance Portal Restricted Link (Approved Access)</span>
+            <button
+              onClick={handleReturnToAdmin}
+              className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
+            >
+              Open Full Portal
+            </button>
+          </div>
+          <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
+            <WorkflowApprovalQueue />
+            <ClientRecordsTable />
+          </div>
+        </div>
+      );
+    }
+
+    if (activeLink?.targetRole === 'Operations') {
+      return (
+        <div className={`min-h-screen font-sans ${
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        }`}>
+          <div className="bg-blue-950/90 border-b border-blue-800/80 px-4 py-2 text-xs text-blue-300 flex items-center justify-between">
+            <span className="font-bold">✓ Operations Desk Restricted Link (Approved Access)</span>
+            <button
+              onClick={handleReturnToAdmin}
+              className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs"
+            >
+              Open Full Portal
+            </button>
+          </div>
+          <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
+            <ClientRecordsTable />
+            <WorkflowApprovalQueue />
+          </div>
+        </div>
+      );
+    }
+
+    if (activeLink?.targetRole === 'Relationship Manager') {
+      return (
+        <div className={`min-h-screen font-sans ${
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        }`}>
+          <div className="bg-amber-950/90 border-b border-amber-800/80 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
+            <span className="font-bold">✓ Relationship Manager Restricted Link (Approved Access)</span>
+            <button
+              onClick={handleReturnToAdmin}
+              className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+            >
+              Open Full Portal
+            </button>
+          </div>
+          <div className="max-w-7xl mx-auto p-4 sm:p-8">
+            <ClientRecordsTable />
+          </div>
+        </div>
+      );
+    }
+
     if (activeLink?.canViewRecords) {
       return (
         <div className={`min-h-screen font-sans ${
@@ -127,7 +198,7 @@ const MainLayout: React.FC = () => {
       );
     }
 
-    // Default approved form link
+    // Default approved customer form link
     return (
       <div className={`min-h-screen font-sans ${
         isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
@@ -176,46 +247,61 @@ const MainLayout: React.FC = () => {
     );
   }
 
+  const renderAccessDenied = (title: string) => (
+    <div className="p-8 rounded-2xl border-2 border-red-600/80 bg-red-950/80 text-white space-y-4 max-w-2xl mx-auto my-12 text-center shadow-2xl">
+      <div className="w-16 h-16 rounded-full bg-red-600/20 border border-red-500/40 flex items-center justify-center mx-auto text-red-400">
+        <ShieldAlert className="w-8 h-8 animate-pulse" />
+      </div>
+      <h2 className="text-xl font-extrabold text-red-200">ACCESS RESTRICTED: ROLE PRIVILEGE REQUIRED</h2>
+      <p className="text-xs text-red-100 leading-relaxed">
+        Your active role <strong className="text-amber-300 font-mono">{activeRole}</strong> does not have admin-granted privileges to access <strong>{title}</strong>.
+      </p>
+      <div className="p-3 bg-black/60 rounded-xl border border-red-900/60 text-[11px] font-mono text-slate-300">
+        Role URL: <span className="text-emerald-400">{window.location.pathname}</span> | Managed in CMS Role Permissions (RBAC)
+      </div>
+    </div>
+  );
+
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'dashboard':
         return <ExecutiveDashboard />;
       case 'public-form':
-        return <PublicKYCForm />;
+        return (isSuperAdmin || rolePerms.canPrintForm) ? <PublicKYCForm /> : renderAccessDenied('Public KYC Portal Form');
       case 'public-status':
         return <PublicStatusChecker />;
       case 'records':
-        return <ClientRecordsTable />;
+        return (isSuperAdmin || rolePerms.canViewClients) ? <ClientRecordsTable /> : renderAccessDenied('Client Records Table');
       case 'cms-formbuilder':
       case 'cms-form-builder':
-        return <CMSFormBuilder />;
+        return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSFormBuilder /> : renderAccessDenied('Dynamic Form Builder');
       case 'cms-units':
-        return <CMSInvestmentUnits />;
+        return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSInvestmentUnits /> : renderAccessDenied('Investment Units Config');
       case 'cms-company':
       case 'cms-bank-account':
-        return <CMSCompanyAccount />;
+        return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSCompanyAccount /> : renderAccessDenied('Company Bank Details');
       case 'cms-officers':
-        return <CMSOfficersBranches />;
+        return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSOfficersBranches /> : renderAccessDenied('Account Officers & Branches');
       case 'cms-branding':
-        return <CMSBranding />;
+        return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSBranding /> : renderAccessDenied('Branding & CMS Settings');
       case 'cms-purview':
-        return <CMSPurviewSecurity />;
+        return (isSuperAdmin || rolePerms.canManagePurview) ? <CMSPurviewSecurity /> : renderAccessDenied('Purview Security & DLP');
       case 'cms-permissions':
-        return <CMSPermissions />;
+        return (isSuperAdmin || rolePerms.canManagePermissions) ? <CMSPermissions /> : renderAccessDenied('Role Permissions Matrix');
       case 'cms-backup':
-        return <CMSBackupRestore />;
+        return (isSuperAdmin || rolePerms.canBackupRestore) ? <CMSBackupRestore /> : renderAccessDenied('Backup & Restore Engine');
       case 'documents':
-        return <SharePointDocVault />;
+        return (isSuperAdmin || (rolePerms.canViewClients && rolePerms.canDownloadDocs)) ? <SharePointDocVault /> : renderAccessDenied('SharePoint Document Vault');
       case 'workflow':
       case 'workflow-queue':
-        return <WorkflowApprovalQueue />;
+        return (isSuperAdmin || rolePerms.canApproveReject) ? <WorkflowApprovalQueue /> : renderAccessDenied('Workflow Approval Queue');
       case 'link-sharing':
       case 'link-security':
-        return <LinkSharingSimulator />;
+        return (isSuperAdmin || rolePerms.canManagePurview) ? <LinkSharingSimulator /> : renderAccessDenied('Link Security & Sharing');
       case 'audit-trail':
-        return <AuditTrailViewer />;
+        return (isSuperAdmin || rolePerms.canViewAuditLogs) ? <AuditTrailViewer /> : renderAccessDenied('Immutable Audit Trail');
       case 'reports':
-        return <ReportsDashboard />;
+        return (isSuperAdmin || rolePerms.canManagePurview) ? <ReportsDashboard /> : renderAccessDenied('Reports Dashboard');
       case 'notifications':
         return <NotificationCenter />;
       default:

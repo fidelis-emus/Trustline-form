@@ -195,17 +195,24 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [clients, setClients] = useState<ClientKYCRecord[]>(() => {
     const saved = localStorage.getItem('kyc_clients');
-    return saved ? JSON.parse(saved) : initialClients;
+    if (!saved) return initialClients;
+    const parsed: ClientKYCRecord[] = JSON.parse(saved);
+    // Filter out dummy test clients if present
+    return parsed.filter(c => !['cli-1', 'cli-2', 'cli-3'].includes(c.id));
   });
 
   const [documents, setDocuments] = useState<KYCDocument[]>(() => {
     const saved = localStorage.getItem('kyc_documents');
-    return saved ? JSON.parse(saved) : initialDocuments;
+    if (!saved) return initialDocuments;
+    const parsed: KYCDocument[] = JSON.parse(saved);
+    return parsed.filter(d => !['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5'].includes(d.id));
   });
 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     const saved = localStorage.getItem('kyc_audit_logs');
-    return saved ? JSON.parse(saved) : initialAuditLogs;
+    if (!saved) return initialAuditLogs;
+    const parsed: AuditLogEntry[] = JSON.parse(saved);
+    return parsed.filter(l => !['log-1', 'log-2', 'log-3', 'log-4', 'log-5'].includes(l.id));
   });
 
   const initialSharedLinks: SharedLink[] = [
@@ -215,44 +222,21 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: 'Customer Direct Onboarding Form',
       linkType: 'Public KYC Form',
       createdBy: 'Super Admin',
-      createdAt: '2026-07-22 08:00:00',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
       expiresAt: '2026-12-31 23:59:59',
       recipientName: 'General Corporate Clients',
       allowedEmail: '',
       requirePassword: false,
       requireOTP: false,
       maxDownloads: 1000,
-      currentDownloads: 14,
+      currentDownloads: 0,
       isActive: true,
       isApproved: true,
       approvedBy: 'Super Admin',
-      approvedAt: '2026-07-22 08:00:00',
+      approvedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
       canFillForm: true,
       canViewRecords: false,
       canDownloadDocs: false
-    },
-    {
-      id: 'link-2',
-      token: 'RESTRICTED-AUDIT-LINK-904',
-      title: 'Dr. Babajide KYC Record Link',
-      linkType: 'Client Record Access',
-      clientId: 'cli-1',
-      createdBy: 'Relationship Manager',
-      createdAt: '2026-07-22 08:15:00',
-      expiresAt: '2026-09-30 23:59:59',
-      recipientName: 'External Compliance Auditor',
-      allowedEmail: 'auditor@externalfirm.org',
-      requirePassword: true,
-      password: 'AuditPass2026!',
-      requireOTP: true,
-      otpCode: '889201',
-      maxDownloads: 5,
-      currentDownloads: 0,
-      isActive: true,
-      isApproved: false, // PENDING SUPER ADMIN APPROVAL!
-      canFillForm: false,
-      canViewRecords: true,
-      canDownloadDocs: true
     }
   ];
 
