@@ -17,37 +17,54 @@ export const SecureLoginModal: React.FC = () => {
 
   const isDark = themeMode === 'dark';
 
-  const [selectedRoleTab, setSelectedRoleTab] = useState<RoleType>(activeRole || 'Super Admin');
+  // Detect route path lock
+  const pathRole = React.useMemo<RoleType | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const p = window.location.pathname.toLowerCase();
+    if (p.includes('/superadmin')) return 'Super Admin';
+    if (p.includes('/operations')) return 'Operations';
+    if (p.includes('/compliance')) return 'Compliance';
+    if (p.includes('/relationship')) return 'Relationship Manager';
+    return null;
+  }, []);
+
+  const [selectedRoleTab, setSelectedRoleTab] = useState<RoleType>(pathRole || activeRole || 'Super Admin');
   const [email, setEmail] = useState('superadmin@aegisbank.com');
   const [password, setPassword] = useState('SuperAdmin#2026!');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Sync default credentials when switching role tabs
+  // Sync default credentials when switching role tabs or on locked path
   useEffect(() => {
+    const roleToUse = pathRole || selectedRoleTab;
     let defaultEmail = 'superadmin@aegisbank.com';
     let defaultPass = 'SuperAdmin#2026!';
 
-    if (selectedRoleTab === 'Operations') {
+    if (roleToUse === 'Operations') {
       defaultEmail = 'operations@aegisbank.com';
       defaultPass = 'Operations#2026!';
-    } else if (selectedRoleTab === 'Compliance') {
+    } else if (roleToUse === 'Compliance') {
       defaultEmail = 'compliance@aegisbank.com';
       defaultPass = 'Compliance#2026!';
-    } else if (selectedRoleTab === 'Relationship Manager') {
+    } else if (roleToUse === 'Relationship Manager') {
       defaultEmail = 'relationship@aegisbank.com';
       defaultPass = 'Relationship#2026!';
+    }
+
+    if (pathRole && selectedRoleTab !== pathRole) {
+      setSelectedRoleTab(pathRole);
     }
 
     setEmail(defaultEmail);
     setPassword(defaultPass);
     setErrorMessage(null);
-  }, [selectedRoleTab]);
+  }, [selectedRoleTab, pathRole]);
 
   if (!isLoginModalOpen) {
     return null;
   }
 
   const handleRoleTabClick = (role: RoleType) => {
+    if (pathRole) return; // Locked to path
     setSelectedRoleTab(role);
     setActiveRole(role);
   };
@@ -56,18 +73,20 @@ export const SecureLoginModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    const result = login(email, password, selectedRoleTab);
+    const targetRole = pathRole || selectedRoleTab;
+    const result = login(email, password, targetRole);
     if (!result.success) {
       setErrorMessage(result.message);
     }
   };
 
   const quickFillUser = (accEmail: string, accPass: string, role: RoleType) => {
-    setSelectedRoleTab(role);
+    const targetRole = pathRole || role;
+    setSelectedRoleTab(targetRole);
     setEmail(accEmail);
     setPassword(accPass);
     setErrorMessage(null);
-    login(accEmail, accPass, role);
+    login(accEmail, accPass, targetRole);
   };
 
   const roles: { role: RoleType; icon: any; title: string; desc: string; color: string; path: string }[] = [
@@ -105,6 +124,8 @@ export const SecureLoginModal: React.FC = () => {
     },
   ];
 
+  const effectiveRole = pathRole || selectedRoleTab;
+
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-lg animate-fadeIn">
       <div className={`w-full max-w-2xl rounded-3xl border shadow-2xl overflow-hidden transition-all ${
@@ -124,7 +145,7 @@ export const SecureLoginModal: React.FC = () => {
             <div>
               <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center space-x-1">
                 <Lock className="w-3 h-3" />
-                <span>Secure Multi-Portal Authentication Engine</span>
+                <span>{pathRole ? `${pathRole} Dedicated Portal Login` : 'Secure Multi-Portal Authentication Engine'}</span>
               </div>
               <h2 className="text-base font-black tracking-tight text-white">
                 {branding.companyName || 'Aegis Private Banking'}
@@ -140,41 +161,43 @@ export const SecureLoginModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Separate Portal Role Tabs */}
-        <div className="p-4 bg-slate-950/50 border-b border-slate-800/80">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
-            Select Portal Access Level:
+        {/* Multi-Portal Role Tabs (Hidden if path explicitly locks to /superadmin, /operations, /compliance, or /relationship) */}
+        {!pathRole && (
+          <div className="p-4 bg-slate-950/50 border-b border-slate-800/80">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
+              Select Portal Access Level:
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {roles.map(r => {
+                const Icon = r.icon;
+                const isSelected = selectedRoleTab === r.role;
+                return (
+                  <button
+                    key={r.role}
+                    type="button"
+                    onClick={() => handleRoleTabClick(r.role)}
+                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                      isSelected
+                        ? `bg-gradient-to-br ${r.color} shadow-lg scale-[1.02]`
+                        : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                    </div>
+                    <div className="font-extrabold text-xs text-white leading-tight">{r.role}</div>
+                    <div className="text-[9px] font-mono opacity-80 mt-1">{r.path}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {roles.map(r => {
-              const Icon = r.icon;
-              const isSelected = selectedRoleTab === r.role;
-              return (
-                <button
-                  key={r.role}
-                  type="button"
-                  onClick={() => handleRoleTabClick(r.role)}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                    isSelected
-                      ? `bg-gradient-to-br ${r.color} shadow-lg scale-[1.02]`
-                      : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                  </div>
-                  <div className="font-extrabold text-xs text-white leading-tight">{r.role}</div>
-                  <div className="text-[9px] font-mono opacity-80 mt-1">{r.path}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         {/* Selected Role Info Banner */}
         {(() => {
-          const currentRoleObj = roles.find(r => r.role === selectedRoleTab);
+          const currentRoleObj = roles.find(r => r.role === effectiveRole);
           if (!currentRoleObj) return null;
           const RoleIcon = currentRoleObj.icon;
           return (
@@ -242,65 +265,85 @@ export const SecureLoginModal: React.FC = () => {
             className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs flex items-center justify-center space-x-2 transition-all shadow-xl shadow-emerald-600/20"
           >
             <KeyRound className="w-4 h-4" />
-            <span>Authenticate & Launch {selectedRoleTab} Portal</span>
+            <span>Authenticate & Launch {effectiveRole} Portal</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Quick Fill One-Click Role Accounts Section */}
+        {/* Quick Fill Role Account Shortcut */}
         <div className="p-5 bg-slate-950/80 border-t border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
             <span className="flex items-center space-x-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>One-Click Role Authentication (Demo Credentials)</span>
+              <span>One-Click {effectiveRole} Authentication</span>
             </span>
-            <span className="text-emerald-400">Pre-configured Accounts</span>
+            <span className="text-emerald-400">Pre-configured Credentials</span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => quickFillUser('superadmin@aegisbank.com', 'SuperAdmin#2026!', 'Super Admin')}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
-            >
-              <div className="font-bold text-slate-200">Super Admin</div>
-              <div className="text-[9px] text-slate-400 truncate">superadmin@aegisbank.com</div>
-              <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
-            </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+            {(!pathRole || pathRole === 'Super Admin') && (
+              <button
+                type="button"
+                onClick={() => quickFillUser('superadmin@aegisbank.com', 'SuperAdmin#2026!', 'Super Admin')}
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
+              >
+                <div className="font-bold text-slate-200">Super Admin</div>
+                <div className="text-[9px] text-slate-400 truncate">superadmin@aegisbank.com</div>
+                <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => quickFillUser('operations@aegisbank.com', 'Operations#2026!', 'Operations')}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
-            >
-              <div className="font-bold text-slate-200">Operations</div>
-              <div className="text-[9px] text-slate-400 truncate">operations@aegisbank.com</div>
-              <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
-            </button>
+            {(!pathRole || pathRole === 'Operations') && (
+              <button
+                type="button"
+                onClick={() => quickFillUser('operations@aegisbank.com', 'Operations#2026!', 'Operations')}
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
+              >
+                <div className="font-bold text-slate-200">Operations</div>
+                <div className="text-[9px] text-slate-400 truncate">operations@aegisbank.com</div>
+                <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => quickFillUser('compliance@aegisbank.com', 'Compliance#2026!', 'Compliance')}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
-            >
-              <div className="font-bold text-slate-200">Compliance</div>
-              <div className="text-[9px] text-slate-400 truncate">compliance@aegisbank.com</div>
-              <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
-            </button>
+            {(!pathRole || pathRole === 'Compliance') && (
+              <button
+                type="button"
+                onClick={() => quickFillUser('compliance@aegisbank.com', 'Compliance#2026!', 'Compliance')}
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
+              >
+                <div className="font-bold text-slate-200">Compliance</div>
+                <div className="text-[9px] text-slate-400 truncate">compliance@aegisbank.com</div>
+                <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => quickFillUser('ops.newjoiner@aegisbank.com', 'DefaultPass#2026', 'Operations')}
-              className="p-2 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-left text-[11px] transition-all group"
-              title="Click to test forced password change prompt on first login!"
-            >
-              <div className="font-bold text-amber-200 flex items-center justify-between">
-                <span>New User</span>
-                <span className="text-[8px] bg-amber-500 text-black px-1 rounded font-black">TEST</span>
-              </div>
-              <div className="text-[9px] text-amber-300 truncate">ops.newjoiner@aegisbank.com</div>
-              <div className="text-[9px] text-amber-400 font-bold mt-0.5 group-hover:underline">🔑 Test Password Reset</div>
-            </button>
+            {(!pathRole || pathRole === 'Relationship Manager') && (
+              <button
+                type="button"
+                onClick={() => quickFillUser('relationship@aegisbank.com', 'Relationship#2026!', 'Relationship Manager')}
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-left text-[11px] transition-all"
+              >
+                <div className="font-bold text-slate-200">Relationship Manager</div>
+                <div className="text-[9px] text-slate-400 truncate">relationship@aegisbank.com</div>
+                <div className="text-[9px] text-emerald-400 mt-0.5">Password: Active</div>
+              </button>
+            )}
+
+            {(!pathRole || pathRole === 'Operations') && (
+              <button
+                type="button"
+                onClick={() => quickFillUser('ops.newjoiner@aegisbank.com', 'DefaultPass#2026', 'Operations')}
+                className="p-2 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-left text-[11px] transition-all group"
+                title="Click to test forced password change prompt on first login!"
+              >
+                <div className="font-bold text-amber-200 flex items-center justify-between">
+                  <span>New User</span>
+                  <span className="text-[8px] bg-amber-500 text-black px-1 rounded font-black">TEST</span>
+                </div>
+                <div className="text-[9px] text-amber-300 truncate">ops.newjoiner@aegisbank.com</div>
+                <div className="text-[9px] text-amber-400 font-bold mt-0.5 group-hover:underline">🔑 Test Password Reset</div>
+              </button>
+            )}
           </div>
         </div>
 
