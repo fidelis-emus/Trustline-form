@@ -12,7 +12,11 @@ import {
   Link2,
   Copy,
   Check,
-  X
+  X,
+  LogOut,
+  KeyRound,
+  User,
+  Shield
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -23,7 +27,11 @@ export const Navbar: React.FC = () => {
     toggleTheme, 
     branding, 
     auditLogs,
-    setActiveTab
+    setActiveTab,
+    currentUser,
+    isAuthenticated,
+    logout,
+    setIsLoginModalOpen
   } = useKYC();
 
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -137,6 +145,50 @@ export const Navbar: React.FC = () => {
                 {recentDeniedCount}
               </span>
             </div>
+          )}
+
+          {/* User Profile & Portal Switcher Badge */}
+          {isAuthenticated && currentUser ? (
+            <div className="flex items-center space-x-2 pl-1 border-l border-slate-700/60">
+              <div 
+                onClick={() => setIsLoginModalOpen(true)}
+                className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 cursor-pointer transition-all"
+                title="Click to Switch Portal or Change Account"
+              >
+                <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs font-black">
+                  {currentUser.name.substring(0, 1)}
+                </div>
+                <div className="hidden lg:flex flex-col text-left">
+                  <span className="text-[11px] font-extrabold leading-tight text-slate-100">{currentUser.name}</span>
+                  <span className="text-[9px] font-mono text-emerald-400 leading-tight">{currentUser.role}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all hidden sm:flex items-center space-x-1"
+                title="Switch Portal Access (Super Admin, Operations, Compliance, Relationship)"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>Switch Portal</span>
+              </button>
+
+              <button
+                onClick={logout}
+                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                title="Log Out of Portal"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition-all shadow-md flex items-center space-x-1.5"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Portal Login</span>
+            </button>
           )}
 
           {/* Theme Toggle Button */}

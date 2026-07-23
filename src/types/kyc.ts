@@ -200,6 +200,21 @@ export interface ClientKYCRecord {
   workflowHistory: WorkflowHistory[];
 }
 
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: RoleType;
+  password: string;
+  mustChangePassword: boolean;
+  isFirstLogin: boolean;
+  createdAt: string;
+  createdBy: string;
+  status: 'Active' | 'Locked' | 'Disabled';
+  lastLogin?: string;
+  branch?: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -208,6 +223,10 @@ export interface AuditLogEntry {
   action: 
     | 'Login'
     | 'Logout'
+    | 'Password Changed'
+    | 'User Account Created'
+    | 'User Account Updated'
+    | 'User Password Reset'
     | 'Document Upload'
     | 'Document Download'
     | 'Document Delete'

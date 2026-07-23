@@ -9,7 +9,8 @@ import {
   KYCDocument, 
   AuditLogEntry, 
   SensitivityLabelConfig, 
-  RolePermissionsMatrix 
+  RolePermissionsMatrix,
+  UserAccount
 } from '../types/kyc';
 
 export const initialBranding: BrandingConfig = {
@@ -149,5 +150,103 @@ export const initialAuditLogs: AuditLogEntry[] = [
     device: 'Core Server',
     details: 'Production KYC Portal initialized cleanly. Awaiting live client submissions.',
     status: 'Success'
+  }
+];
+
+export const initialUserAccounts: UserAccount[] = [
+  {
+    id: 'usr-superadmin-1',
+    name: 'Alexander Wright',
+    email: 'superadmin@aegisbank.com',
+    role: 'Super Admin',
+    password: 'SuperAdmin#2026!',
+    mustChangePassword: false,
+    isFirstLogin: false,
+    createdAt: '2026-01-01',
+    createdBy: 'System Provisioning',
+    status: 'Active',
+    branch: 'Executive Directorate',
+    lastLogin: '2026-07-22 09:15:00'
+  },
+  {
+    id: 'usr-operations-1',
+    name: 'Oluwaseun Bakare',
+    email: 'operations@aegisbank.com',
+    role: 'Operations',
+    password: 'Operations#2026!',
+    mustChangePassword: false,
+    isFirstLogin: false,
+    createdAt: '2026-01-15',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'Central Operations Hub',
+    lastLogin: '2026-07-21 14:30:22'
+  },
+  {
+    id: 'usr-operations-2',
+    name: 'Grace Nwosu (New Officer)',
+    email: 'ops.newjoiner@aegisbank.com',
+    role: 'Operations',
+    password: 'DefaultPass#2026',
+    mustChangePassword: true,
+    isFirstLogin: true,
+    createdAt: '2026-07-20',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'Central Operations Hub'
+  },
+  {
+    id: 'usr-compliance-1',
+    name: 'Dr. Farouk Al-Mansoor',
+    email: 'compliance@aegisbank.com',
+    role: 'Compliance',
+    password: 'Compliance#2026!',
+    mustChangePassword: false,
+    isFirstLogin: false,
+    createdAt: '2026-01-10',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'AML & Regulatory Secretariat',
+    lastLogin: '2026-07-22 08:45:10'
+  },
+  {
+    id: 'usr-compliance-2',
+    name: 'Sandra Bullock (New Auditor)',
+    email: 'compliance.new@aegisbank.com',
+    role: 'Compliance',
+    password: 'DefaultPass#2026',
+    mustChangePassword: true,
+    isFirstLogin: true,
+    createdAt: '2026-07-21',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'AML & Regulatory Secretariat'
+  },
+  {
+    id: 'usr-rm-1',
+    name: 'Adebayo Adeleke',
+    email: 'relationship@aegisbank.com',
+    role: 'Relationship Manager',
+    password: 'Relationship#2026!',
+    mustChangePassword: false,
+    isFirstLogin: false,
+    createdAt: '2026-02-01',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'Victoria Island Wealth Hub',
+    lastLogin: '2026-07-22 09:00:00'
+  },
+  {
+    id: 'usr-rm-2',
+    name: 'Chidi Amadi (New RM)',
+    email: 'rm.newjoiner@aegisbank.com',
+    role: 'Relationship Manager',
+    password: 'DefaultPass#2026',
+    mustChangePassword: true,
+    isFirstLogin: true,
+    createdAt: '2026-07-22',
+    createdBy: 'superadmin@aegisbank.com',
+    status: 'Active',
+    branch: 'Ikoyi Private Client Hub'
   }
 ];

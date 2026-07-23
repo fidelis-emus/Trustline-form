@@ -19,7 +19,8 @@ import {
   History, 
   BarChart3, 
   Mail,
-  ChevronRight
+  ChevronRight,
+  KeyRound
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -41,6 +42,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   const cmsNav = [
+    { id: 'cms-users', label: 'User Accounts & Access', icon: KeyRound, show: isSuperAdmin || rolePerms.canManagePermissions },
     { id: 'cms-formbuilder', label: 'Dynamic Form Builder', icon: Sliders, show: isSuperAdmin || rolePerms.canEditCMS },
     { id: 'cms-units', label: 'Investment Units Config', icon: Boxes, show: isSuperAdmin || rolePerms.canEditCMS },
     { id: 'cms-company', label: 'Company Bank Details', icon: Building, show: isSuperAdmin || rolePerms.canEditCMS },

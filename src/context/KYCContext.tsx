@@ -13,7 +13,8 @@ import {
   SensitivityLabelConfig, 
   BrandingConfig, 
   RolePermissionsMatrix, 
-  SharedLink 
+  SharedLink,
+  UserAccount
 } from '../types/kyc';
 
 import { 
@@ -27,7 +28,8 @@ import {
   initialPermissions, 
   initialClients, 
   initialDocuments, 
-  initialAuditLogs 
+  initialAuditLogs,
+  initialUserAccounts
 } from '../data/mockData';
 
 interface KYCContextType {
@@ -103,6 +105,20 @@ interface KYCContextType {
   exportSystemBackup: () => string;
   importSystemBackup: (jsonString: string) => boolean;
   resetToDefaults: () => void;
+
+  userAccounts: UserAccount[];
+  currentUser: UserAccount | null;
+  isAuthenticated: boolean;
+  isLoginModalOpen: boolean;
+  setIsLoginModalOpen: (open: boolean) => void;
+  login: (email: string, password?: string, targetRole?: RoleType) => { success: boolean; message: string; mustChangePassword?: boolean; user?: UserAccount };
+  logout: () => void;
+  createUserAccount: (data: Omit<UserAccount, 'id' | 'createdAt' | 'createdBy' | 'isFirstLogin'>) => UserAccount;
+  updateUserAccount: (id: string, data: Partial<UserAccount>) => void;
+  deleteUserAccount: (id: string) => void;
+  resetUserPassword: (id: string, defaultPassword?: string) => string;
+  changePassword: (userId: string, currentPassword: string, newPassword: string) => { success: boolean; message: string };
+  generateSecureDefaultPassword: () => string;
 }
 
 const KYCContext = createContext<KYCContextType | undefined>(undefined);
@@ -151,6 +167,33 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+
+  // User Accounts & Authentication State
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
+    const saved = localStorage.getItem('kyc_user_accounts');
+    return saved ? JSON.parse(saved) : initialUserAccounts;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kyc_user_accounts', JSON.stringify(userAccounts));
+  }, [userAccounts]);
+
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    const saved = localStorage.getItem('kyc_current_user');
+    return saved ? JSON.parse(saved) : initialUserAccounts[0];
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const saved = localStorage.getItem('kyc_is_authenticated');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    localStorage.setItem('kyc_current_user', JSON.stringify(currentUser));
+    localStorage.setItem('kyc_is_authenticated', JSON.stringify(isAuthenticated));
+  }, [currentUser, isAuthenticated]);
 
   // CMS state loaded from localStorage or fallback to initial
   const [branding, setBranding] = useState<BrandingConfig>(() => {
@@ -906,6 +949,210 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const generateSecureDefaultPassword = (): string => {
+    const prefixes = ['Aegis', 'Trust', 'Secure', 'Portal', 'Shield'];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const num = Math.floor(1000 + Math.random() * 9000);
+    const symbols = ['!', '#', '$', '@', '%'];
+    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+    return `${prefix}#${num}${symbol}`;
+  };
+
+  const login = (email: string, password?: string, targetRole?: RoleType) => {
+    const foundUser = userAccounts.find(
+      u => u.email.toLowerCase() === email.toLowerCase() || (targetRole && u.role === targetRole && !email)
+    );
+
+    if (!foundUser) {
+      return { success: false, message: `No registered account found for ${email || targetRole}.` };
+    }
+
+    if (foundUser.status !== 'Active') {
+      return { success: false, message: `Account ${foundUser.email} is currently ${foundUser.status}. Contact Super Admin.` };
+    }
+
+    if (password && foundUser.password !== password) {
+      return { success: false, message: 'Invalid password. Please check your credentials.' };
+    }
+
+    const updatedUser: UserAccount = {
+      ...foundUser,
+      lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 19)
+    };
+
+    setUserAccounts(prev => prev.map(u => u.id === foundUser.id ? updatedUser : u));
+    setCurrentUser(updatedUser);
+    setIsAuthenticated(true);
+    setActiveRole(foundUser.role);
+    setIsLoginModalOpen(false);
+
+    addAuditLog({
+      user: foundUser.email,
+      role: foundUser.role,
+      action: 'Login',
+      target: `${foundUser.role} Authentication Portal`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `User ${foundUser.name} logged into ${foundUser.role} portal. MustChangePassword: ${foundUser.mustChangePassword}`,
+      status: 'Success'
+    });
+
+    return {
+      success: true,
+      message: 'Login successful.',
+      mustChangePassword: foundUser.mustChangePassword,
+      user: updatedUser
+    };
+  };
+
+  const logout = () => {
+    if (currentUser) {
+      addAuditLog({
+        user: currentUser.email,
+        role: currentUser.role,
+        action: 'Logout',
+        target: 'Authentication Engine',
+        ipAddress: '197.210.10.5',
+        browser: 'Chrome 126.0',
+        os: 'Windows 11',
+        device: 'Workstation',
+        details: `User ${currentUser.email} logged out cleanly.`,
+        status: 'Success'
+      });
+    }
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setIsLoginModalOpen(true);
+  };
+
+  const createUserAccount = (data: Omit<UserAccount, 'id' | 'createdAt' | 'createdBy' | 'isFirstLogin'>): UserAccount => {
+    const newId = `usr-${Date.now()}`;
+    const newUser: UserAccount = {
+      ...data,
+      id: newId,
+      createdAt: new Date().toISOString().substring(0, 10),
+      createdBy: currentUser ? currentUser.email : 'superadmin@aegisbank.com',
+      isFirstLogin: true,
+      mustChangePassword: data.mustChangePassword ?? true,
+      status: data.status || 'Active'
+    };
+
+    setUserAccounts(prev => [newUser, ...prev]);
+
+    addAuditLog({
+      user: currentUser ? currentUser.email : 'Super Admin',
+      role: activeRole,
+      action: 'User Account Created',
+      target: `User: ${newUser.email}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Created new user ${newUser.name} (${newUser.email}) with role ${newUser.role}. Default password generated.`,
+      status: 'Success'
+    });
+
+    return newUser;
+  };
+
+  const updateUserAccount = (id: string, data: Partial<UserAccount>) => {
+    setUserAccounts(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+    if (currentUser && currentUser.id === id) {
+      setCurrentUser(prev => prev ? { ...prev, ...data } : null);
+    }
+
+    addAuditLog({
+      user: currentUser ? currentUser.email : 'Super Admin',
+      role: activeRole,
+      action: 'User Account Updated',
+      target: `User ID: ${id}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Updated user account details.`,
+      status: 'Success'
+    });
+  };
+
+  const deleteUserAccount = (id: string) => {
+    setUserAccounts(prev => prev.filter(u => u.id !== id));
+  };
+
+  const resetUserPassword = (id: string, customDefault?: string): string => {
+    const newPass = customDefault || generateSecureDefaultPassword();
+    setUserAccounts(prev => prev.map(u => {
+      if (u.id === id) {
+        return {
+          ...u,
+          password: newPass,
+          mustChangePassword: true,
+          isFirstLogin: true
+        };
+      }
+      return u;
+    }));
+
+    addAuditLog({
+      user: currentUser ? currentUser.email : 'Super Admin',
+      role: activeRole,
+      action: 'User Password Reset',
+      target: `User ID: ${id}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Super Admin reset password for user ID ${id}. Set mustChangePassword to true.`,
+      status: 'Success'
+    });
+
+    return newPass;
+  };
+
+  const changePassword = (userId: string, currentPassword: string, newPassword: string) => {
+    const target = userAccounts.find(u => u.id === userId || u.email === userId);
+    if (!target) {
+      return { success: false, message: 'User account not found.' };
+    }
+
+    if (target.password !== currentPassword) {
+      return { success: false, message: 'Current default password does not match.' };
+    }
+
+    if (newPassword.length < 8) {
+      return { success: false, message: 'New password must be at least 8 characters long.' };
+    }
+
+    const updatedUser: UserAccount = {
+      ...target,
+      password: newPassword,
+      mustChangePassword: false,
+      isFirstLogin: false
+    };
+
+    setUserAccounts(prev => prev.map(u => u.id === target.id ? updatedUser : u));
+    if (currentUser && currentUser.id === target.id) {
+      setCurrentUser(updatedUser);
+    }
+
+    addAuditLog({
+      user: target.email,
+      role: target.role,
+      action: 'Password Changed',
+      target: `Account: ${target.email}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `User ${target.email} successfully updated default password. mustChangePassword set to false.`,
+      status: 'Success'
+    });
+
+    return { success: true, message: 'Password successfully updated! You now have full access.' };
+  };
+
   const resetToDefaults = () => {
     localStorage.clear();
     setBranding(initialBranding);
@@ -919,6 +1166,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClients(initialClients);
     setDocuments(initialDocuments);
     setAuditLogs(initialAuditLogs);
+    setUserAccounts(initialUserAccounts);
+    setCurrentUser(initialUserAccounts[0]);
+    setIsAuthenticated(true);
   };
 
   return (
@@ -979,7 +1229,20 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSelectedClientForPrint,
       exportSystemBackup,
       importSystemBackup,
-      resetToDefaults
+      resetToDefaults,
+      userAccounts,
+      currentUser,
+      isAuthenticated,
+      isLoginModalOpen,
+      setIsLoginModalOpen,
+      login,
+      logout,
+      createUserAccount,
+      updateUserAccount,
+      deleteUserAccount,
+      resetUserPassword,
+      changePassword,
+      generateSecureDefaultPassword
     }}>
       {children}
     </KYCContext.Provider>

@@ -13,6 +13,7 @@ import { ClientDetailDrawer } from './components/records/ClientDetailDrawer';
 import { PrintableKYCForm } from './components/records/PrintableKYCForm';
 
 // CMS Admin Suite Imports
+import { CMSUserManagement } from './components/admin/CMSUserManagement';
 import { CMSFormBuilder } from './components/admin/CMSFormBuilder';
 import { CMSInvestmentUnits } from './components/admin/CMSInvestmentUnits';
 import { CMSCompanyAccount } from './components/admin/CMSCompanyAccount';
@@ -21,6 +22,10 @@ import { CMSBranding } from './components/admin/CMSBranding';
 import { CMSPurviewSecurity } from './components/admin/CMSPurviewSecurity';
 import { CMSPermissions } from './components/admin/CMSPermissions';
 import { CMSBackupRestore } from './components/admin/CMSBackupRestore';
+
+// Auth Modals
+import { ForcePasswordChangeModal } from './components/auth/ForcePasswordChangeModal';
+import { SecureLoginModal } from './components/auth/SecureLoginModal';
 
 // Other Modules
 import { SharePointDocVault } from './components/documents/SharePointDocVault';
@@ -272,6 +277,8 @@ const MainLayout: React.FC = () => {
         return <PublicStatusChecker />;
       case 'records':
         return (isSuperAdmin || rolePerms.canViewClients) ? <ClientRecordsTable /> : renderAccessDenied('Client Records Table');
+      case 'cms-users':
+        return (isSuperAdmin || rolePerms.canManagePermissions) ? <CMSUserManagement /> : renderAccessDenied('User Accounts & Access');
       case 'cms-formbuilder':
       case 'cms-form-builder':
         return (isSuperAdmin || rolePerms.canEditCMS) ? <CMSFormBuilder /> : renderAccessDenied('Dynamic Form Builder');
@@ -332,6 +339,12 @@ const MainLayout: React.FC = () => {
 
       {/* Printable A4 KYC Form Overlay */}
       <PrintableKYCForm />
+
+      {/* Force Password Change Modal on First Login */}
+      <ForcePasswordChangeModal />
+
+      {/* Secure Multi-Portal Login Modal */}
+      <SecureLoginModal />
     </div>
   );
 };
