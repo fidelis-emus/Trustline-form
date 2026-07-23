@@ -29,8 +29,10 @@ import {
   initialClients, 
   initialDocuments, 
   initialAuditLogs,
-  initialUserAccounts
+  initialUserAccounts,
+  initialEmailSettings
 } from '../data/mockData';
+import { EmailSettings } from '../types/kyc';
 
 interface KYCContextType {
   activeRole: RoleType;
@@ -42,6 +44,9 @@ interface KYCContextType {
 
   branding: BrandingConfig;
   updateBranding: (branding: Partial<BrandingConfig>) => void;
+
+  emailSettings: EmailSettings;
+  updateEmailSettings: (settings: Partial<EmailSettings>) => void;
 
   sections: FormSection[];
   fields: FormField[];
@@ -201,6 +206,11 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialBranding;
   });
 
+  const [emailSettings, setEmailSettings] = useState<EmailSettings>(() => {
+    const saved = localStorage.getItem('kyc_email_settings');
+    return saved ? JSON.parse(saved) : initialEmailSettings;
+  });
+
   const [sections, setSections] = useState<FormSection[]>(() => {
     const saved = localStorage.getItem('kyc_sections');
     return saved ? JSON.parse(saved) : initialSections;
@@ -293,6 +303,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sync state to local storage
   useEffect(() => { localStorage.setItem('kyc_branding', JSON.stringify(branding)); }, [branding]);
+  useEffect(() => { localStorage.setItem('kyc_email_settings', JSON.stringify(emailSettings)); }, [emailSettings]);
   useEffect(() => { localStorage.setItem('kyc_sections', JSON.stringify(sections)); }, [sections]);
   useEffect(() => { localStorage.setItem('kyc_fields', JSON.stringify(fields)); }, [fields]);
   useEffect(() => { localStorage.setItem('kyc_units', JSON.stringify(units)); }, [units]);
@@ -339,6 +350,22 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       os: 'Windows 11 Enterprise',
       device: 'Workstation',
       details: 'Updated CMS branding title, theme colors, or watermark headers.',
+      status: 'Success'
+    });
+  };
+
+  const updateEmailSettings = (data: Partial<EmailSettings>) => {
+    setEmailSettings(prev => ({ ...prev, ...data }));
+    addAuditLog({
+      user: activeRole,
+      role: activeRole,
+      action: 'Field Configuration Updated',
+      target: 'Email SMTP & Notification Settings',
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11 Enterprise',
+      device: 'Workstation',
+      details: 'Updated SMTP server settings, sender email, or Relationship Manager copy email.',
       status: 'Success'
     });
   };
@@ -701,8 +728,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const token = `SHR-TOKEN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     
-    // Super Admin auto-approves or approves according to isApproved param
-    const isApprovedByRole = activeRole === 'Super Admin' ? (linkData.isApproved !== undefined ? linkData.isApproved : true) : (linkData.isApproved || false);
+    // Customer/Client Form links are ALWAYS unrestricted and approved by default.
+    const isCustomerLink = linkData.targetRole === 'Customer' || linkData.linkType === 'Public KYC Form';
+    const isApprovedByRole = isCustomerLink ? true : (activeRole === 'Super Admin' ? (linkData.isApproved !== undefined ? linkData.isApproved : true) : (linkData.isApproved || false));
 
     const newLink: SharedLink = {
       ...linkData,
@@ -726,7 +754,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       browser: 'Chrome 126.0',
       os: 'Windows 11',
       device: 'Workstation',
-      details: `Created link "${newLink.title}". Approval Status: ${isApprovedByRole ? 'Approved' : 'Pending Super Admin Approval'}. Expiry: ${linkData.expiresAt}`,
+      details: `Created link "${newLink.title}". Approval Status: ${isApprovedByRole ? 'Approved' : 'Pending Approval'}. Expiry: ${linkData.expiresAt}`,
       status: 'Success'
     });
 
@@ -757,7 +785,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       browser: 'Chrome 126.0',
       os: 'Windows 11',
       device: 'Workstation',
-      details: `Super Admin ${approved ? 'GRANTED APPROVAL' : 'REVOKED APPROVAL'} for shared link token: ${targetLink?.token}`,
+      details: `Admin ${approved ? 'GRANTED APPROVAL' : 'REVOKED APPROVAL'} for shared link token: ${targetLink?.token}`,
       status: 'Success'
     });
   };
@@ -813,8 +841,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { valid: false, message: 'This link has been deactivated or revoked by the administrator.', link };
     }
 
-    // CHECK SUPER ADMIN APPROVAL
-    if (!link.isApproved) {
+    // CHECK APPROVAL RESTRICTION (Customer/Client form links are ALWAYS unrestricted and free to access)
+    const isCustomerLink = link.targetRole === 'Customer' || link.linkType === 'Public KYC Form';
+    if (!link.isApproved && !isCustomerLink) {
       addAuditLog({
         user: 'Guest / Link User',
         role: 'Operations',
@@ -824,15 +853,16 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         browser: 'Chrome 126.0',
         os: 'Windows 11',
         device: 'Desktop',
-        details: 'Attempted to open link before Super Admin granted approval privilege.',
+        details: 'Attempted to open restricted link before Compliance granted approval privilege.',
         status: 'Denied'
       });
       return { 
         valid: false, 
-        message: 'ACCESS RESTRICTED: This link requires explicit Super Admin approval before access is permitted.', 
+        message: 'This generated link is restricted. Without explicit Compliance privilege approval, you cannot access or open this link.', 
         link 
       };
     }
+
 
     if (new Date(link.expiresAt) < new Date()) {
       addAuditLog({
@@ -986,6 +1016,20 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveRole(foundUser.role);
     setIsLoginModalOpen(false);
 
+    // Redirect to default role tab if user cannot view Super Admin Executive Dashboard
+    const userPerms = permissions[foundUser.role] || permissions['Super Admin'];
+    if (foundUser.role !== 'Super Admin' && !userPerms?.canViewDashboard) {
+      if (foundUser.role === 'Compliance') {
+        setActiveTab('audit-trail');
+      } else if (foundUser.role === 'Operations') {
+        setActiveTab('workflow');
+      } else if (foundUser.role === 'Relationship Manager') {
+        setActiveTab('records');
+      } else {
+        setActiveTab('records');
+      }
+    }
+
     addAuditLog({
       user: foundUser.email,
       role: foundUser.role,
@@ -1028,6 +1072,10 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createUserAccount = (data: Omit<UserAccount, 'id' | 'createdAt' | 'createdBy' | 'isFirstLogin'>): UserAccount => {
+    if (activeRole !== 'Super Admin') {
+      alert('Unauthorized: Only Super Admin can create user accounts.');
+      throw new Error('Unauthorized: Only Super Admin can create user accounts.');
+    }
     const newId = `usr-${Date.now()}`;
     const newUser: UserAccount = {
       ...data,
@@ -1078,10 +1126,18 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteUserAccount = (id: string) => {
+    if (activeRole !== 'Super Admin') {
+      alert('Unauthorized: Only Super Admin can delete user accounts.');
+      return;
+    }
     setUserAccounts(prev => prev.filter(u => u.id !== id));
   };
 
   const resetUserPassword = (id: string, customDefault?: string): string => {
+    if (activeRole !== 'Super Admin') {
+      alert('Unauthorized: Only Super Admin can generate default passwords or reset user accounts.');
+      return '';
+    }
     const newPass = customDefault || generateSecureDefaultPassword();
     setUserAccounts(prev => prev.map(u => {
       if (u.id === id) {
@@ -1181,6 +1237,8 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toggleTheme,
       branding,
       updateBranding,
+      emailSettings,
+      updateEmailSettings,
       sections,
       fields,
       addSection,

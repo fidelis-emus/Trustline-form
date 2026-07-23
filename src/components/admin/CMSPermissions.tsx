@@ -15,7 +15,8 @@ export const CMSPermissions: React.FC = () => {
   ];
 
   const permKeys: { key: PermissionKey; label: string; desc: string }[] = [
-    { key: 'canViewClients', label: 'View Client Records & Dashboard', desc: 'Permits viewing the Executive Dashboard, Client Records list, and client profile details.' },
+    { key: 'canViewDashboard', label: 'View Super Admin Executive Dashboard', desc: 'Permits non-admin roles to view the Executive Super Admin Dashboard metrics and stats.' },
+    { key: 'canViewClients', label: 'View Client Records & Lifecycle', desc: 'Permits viewing the Client Records list and client profile details.' },
     { key: 'canEditClients', label: 'Edit Client Bio-Data & Information', desc: 'Permits modifying client personal details, employment, financial, and bank data.' },
     { key: 'canApproveReject', label: 'Approve / Reject KYC Workflow', desc: 'Permits transitioning records across compliance stages and approving/rejecting applications.' },
     { key: 'canSuspendArchive', label: 'Suspend & Delete Client Records', desc: 'Permits suspending active clients or permanently removing records.' },

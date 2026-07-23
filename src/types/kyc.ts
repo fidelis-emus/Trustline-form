@@ -312,6 +312,7 @@ export interface SharedLink {
 }
 
 export type PermissionKey = 
+  | 'canViewDashboard'
   | 'canViewClients'
   | 'canEditClients'
   | 'canApproveReject'
@@ -325,3 +326,18 @@ export type PermissionKey =
   | 'canManagePurview';
 
 export type RolePermissionsMatrix = Record<RoleType, Record<PermissionKey, boolean>>;
+
+export interface EmailSettings {
+  smtpHost: string;
+  smtpPort: number;
+  senderEmail: string;
+  senderName: string;
+  relationshipManagerEmail: string;
+  complianceNotificationEmail: string;
+  enableAutoDispatch: boolean;
+  copyApplicantOnSubmission: boolean;
+  copyRelationshipManager: boolean;
+  smtpUsername?: string;
+  smtpPassword?: string;
+  useTLS: boolean;
+}

@@ -525,7 +525,7 @@ export const LinkSharingSimulator: React.FC = () => {
                 {accessDeniedState.reason}
               </p>
               <div className="p-3 rounded-lg bg-black/70 font-mono text-xs text-amber-300 border border-amber-500/40">
-                ⚠️ WARNING: Direct access blocked until Super Admin grants approval.
+                ⚠️ WARNING: Direct access blocked until Compliance privilege approval is granted.
               </div>
               <p className="text-[10px] text-red-300 font-mono">
                 Security Audit Logged | Target Token: {testTokenInput}

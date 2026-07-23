@@ -30,7 +30,7 @@ export const Sidebar: React.FC = () => {
   const isSuperAdmin = activeRole === 'Super Admin';
 
   const mainNav = [
-    { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard, show: true },
+    { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard, show: isSuperAdmin || rolePerms.canViewDashboard },
     { id: 'records', label: 'Client Records & Lifecycle', icon: Users, show: rolePerms.canViewClients },
     { id: 'workflow', label: 'Workflow & Approvals', icon: GitPullRequest, show: rolePerms.canApproveReject },
     { id: 'documents', label: 'SharePoint Document Vault', icon: FolderLock, show: rolePerms.canViewClients && rolePerms.canDownloadDocs },
@@ -48,6 +48,7 @@ export const Sidebar: React.FC = () => {
     { id: 'cms-company', label: 'Company Bank Details', icon: Building, show: isSuperAdmin || rolePerms.canEditCMS },
     { id: 'cms-officers', label: 'Account Officers & Branches', icon: UserCheck, show: isSuperAdmin || rolePerms.canEditCMS },
     { id: 'cms-branding', label: 'Branding & CMS Settings', icon: Palette, show: isSuperAdmin || rolePerms.canEditCMS },
+    { id: 'cms-email', label: 'Email & SMTP Settings', icon: Mail, show: isSuperAdmin || rolePerms.canEditCMS },
     { id: 'cms-purview', label: 'Purview Security & DLP', icon: ShieldAlert, show: isSuperAdmin || rolePerms.canManagePurview },
     { id: 'cms-permissions', label: 'Role Permissions (RBAC)', icon: Lock, show: isSuperAdmin || rolePerms.canManagePermissions },
     { id: 'cms-backup', label: 'Backup & Restore Engine', icon: HardDriveDownload, show: isSuperAdmin || rolePerms.canBackupRestore },
@@ -55,7 +56,7 @@ export const Sidebar: React.FC = () => {
 
   const securityNav = [
     { id: 'link-sharing', label: 'Link Security & Sharing', icon: Share2, show: isSuperAdmin || rolePerms.canManagePurview },
-    { id: 'audit-trail', label: 'Immutable Audit Trail', icon: History, show: isSuperAdmin || rolePerms.canViewAuditLogs },
+    { id: 'audit-trail', label: 'Immutable Audit Trail', icon: History, show: isSuperAdmin || activeRole === 'Compliance' || rolePerms.canViewAuditLogs },
     { id: 'reports', label: 'Reports & Compliance SLA', icon: BarChart3, show: isSuperAdmin || rolePerms.canManagePurview },
     { id: 'notifications', label: 'Power Automate Logs', icon: Mail, show: isSuperAdmin || rolePerms.canManagePurview },
   ];

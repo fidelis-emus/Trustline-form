@@ -10,8 +10,24 @@ import {
   AuditLogEntry, 
   SensitivityLabelConfig, 
   RolePermissionsMatrix,
-  UserAccount
+  UserAccount,
+  EmailSettings
 } from '../types/kyc';
+
+export const initialEmailSettings: EmailSettings = {
+  smtpHost: 'smtp.aegisbank.com',
+  smtpPort: 587,
+  senderEmail: 'notifications@aegisbank.com',
+  senderName: 'Aegis Investment KYC Compliance System',
+  relationshipManagerEmail: 'relationship.desk@aegisbank.com',
+  complianceNotificationEmail: 'compliance.desk@aegisbank.com',
+  enableAutoDispatch: true,
+  copyApplicantOnSubmission: true,
+  copyRelationshipManager: true,
+  smtpUsername: 'smtp_kyc_aegis',
+  smtpPassword: '••••••••••••',
+  useTLS: true
+};
 
 export const initialBranding: BrandingConfig = {
   companyName: "Aegis Global Private Banking & Wealth Management",
@@ -126,10 +142,10 @@ export const initialPurviewLabels: SensitivityLabelConfig[] = [
 ];
 
 export const initialPermissions: RolePermissionsMatrix = {
-  'Super Admin': { canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: true, canDownloadDocs: true, canPrintForm: true, canEditCMS: true, canManagePermissions: true, canViewAuditLogs: true, canBackupRestore: true, canManagePurview: true },
-  'Compliance': { canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: true, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: true, canBackupRestore: false, canManagePurview: true },
-  'Relationship Manager': { canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: false, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: false, canBackupRestore: false, canManagePurview: false },
-  'Operations': { canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: false, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: false, canBackupRestore: false, canManagePurview: false },
+  'Super Admin': { canViewDashboard: true, canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: true, canDownloadDocs: true, canPrintForm: true, canEditCMS: true, canManagePermissions: true, canViewAuditLogs: true, canBackupRestore: true, canManagePurview: true },
+  'Compliance': { canViewDashboard: false, canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: true, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: true, canBackupRestore: false, canManagePurview: true },
+  'Relationship Manager': { canViewDashboard: false, canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: false, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: false, canBackupRestore: false, canManagePurview: false },
+  'Operations': { canViewDashboard: false, canViewClients: true, canEditClients: true, canApproveReject: true, canSuspendArchive: false, canDownloadDocs: true, canPrintForm: true, canEditCMS: false, canManagePermissions: false, canViewAuditLogs: false, canBackupRestore: false, canManagePurview: false },
 };
 
 export const initialClients: ClientKYCRecord[] = [];

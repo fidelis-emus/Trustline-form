@@ -16,7 +16,8 @@ import {
   Copy,
   Check,
   MessageSquare,
-  Phone
+  Phone,
+  Mail
 } from 'lucide-react';
 
 export const PublicKYCForm: React.FC = () => {
@@ -27,6 +28,7 @@ export const PublicKYCForm: React.FC = () => {
     units, 
     companyBankDetails, 
     officers, 
+    emailSettings,
     addClientRecord, 
     setSelectedClientForPrint,
     themeMode 
@@ -185,25 +187,36 @@ export const PublicKYCForm: React.FC = () => {
 
           {/* Reference Card */}
           <div className={`p-5 rounded-xl border max-w-md mx-auto ${
-            isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+            isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-100 border-slate-300'
           }`}>
             <span className="text-xs uppercase font-bold text-slate-500 tracking-wider">
               Assigned Client KYC Reference Number
             </span>
             <div className="flex items-center justify-center space-x-3 mt-2">
-              <span className="text-2xl font-mono font-extrabold text-emerald-400 tracking-wider">
+              <span className="text-2xl font-mono font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wider">
                 {submittedClientNum}
               </span>
               <button 
                 onClick={copyClientNum} 
-                className="p-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 transition-colors"
+                className="p-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-700 dark:text-emerald-300 transition-colors"
                 title="Copy Reference ID"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
               Please save this Client Number to track your verification lifecycle status.
+            </p>
+          </div>
+
+          {/* Email Copy Automated Dispatch Confirmation Notice */}
+          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs text-left space-y-2 max-w-lg mx-auto">
+            <div className="flex items-center space-x-2 font-bold text-sm text-emerald-700 dark:text-emerald-400">
+              <Mail className="w-4 h-4 shrink-0" />
+              <span>Automated Form Copy Dispatched</span>
+            </div>
+            <p className="text-slate-700 dark:text-slate-300">
+              A copy of your submitted KYC application has been automatically dispatched to your personal email (<strong className="text-black dark:text-white font-bold">{formData['f-email'] || formData.email || 'client@aegisbank.com'}</strong>) and copied to Relationship Management (<strong className="text-black dark:text-white font-bold">{emailSettings.relationshipManagerEmail}</strong>).
             </p>
           </div>
 
@@ -327,19 +340,19 @@ export const PublicKYCForm: React.FC = () => {
 
         {/* Passport Photograph & Authorized Signature Upload Placeholders Card */}
         <div className={`p-6 rounded-2xl border space-y-6 shadow-md ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-300 border-slate-400 text-black'
         }`}>
-          <div className="border-b pb-3 border-slate-800/80 flex items-center justify-between">
+          <div className="border-b pb-3 border-slate-400 dark:border-slate-800/80 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-emerald-400 tracking-tight flex items-center space-x-2">
-                <Camera className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-lg font-extrabold text-slate-950 dark:text-emerald-400 tracking-tight flex items-center space-x-2">
+                <Camera className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                 <span>Client Identification Photo & Authorized Signature</span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-800 dark:text-slate-400 mt-0.5 font-medium">
                 Upload your passport photograph in the photo placeholder and digital signature in the signature placeholder.
               </p>
             </div>
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
+            <span className="text-[10px] bg-emerald-600/20 text-emerald-900 dark:text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-600/30 font-bold">
               Mandatory Identity Media
             </span>
           </div>

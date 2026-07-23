@@ -22,6 +22,7 @@ import { CMSBranding } from './components/admin/CMSBranding';
 import { CMSPurviewSecurity } from './components/admin/CMSPurviewSecurity';
 import { CMSPermissions } from './components/admin/CMSPermissions';
 import { CMSBackupRestore } from './components/admin/CMSBackupRestore';
+import { CMSEmailSettings } from './components/admin/CMSEmailSettings';
 
 // Auth Modals
 import { ForcePasswordChangeModal } from './components/auth/ForcePasswordChangeModal';
@@ -61,7 +62,8 @@ const MainLayout: React.FC = () => {
   // If token is present in URL
   if (tokenParam) {
     const activeLink = sharedLinks.find(l => l.token === tokenParam);
-    const isApproved = activeLink?.isApproved;
+    const isCustomerLink = activeLink?.targetRole === 'Customer' || activeLink?.linkType === 'Public KYC Form';
+    const isApproved = activeLink?.isApproved || isCustomerLink;
 
     if (!isApproved) {
       return (
@@ -89,15 +91,12 @@ const MainLayout: React.FC = () => {
                 ⚠️ WARNING: Direct Access Blocked
               </p>
               <p>
-                This generated link is restricted. Without explicit <strong>Super Admin privilege approval</strong>, you cannot access or open this link.
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Token ID: <span className="font-mono text-emerald-400">{tokenParam}</span>
+                This generated link is restricted. Without explicit <strong>Compliance privilege approval</strong>, you cannot access or open this link.
               </p>
             </div>
 
             <p className="text-xs text-slate-400">
-              Please request the Super Administrator to grant approval privileges for this link in the Link Security Portal.
+              Please request Compliance to grant approval privileges for this link in the Link Security Portal.
             </p>
 
             <button
@@ -114,6 +113,7 @@ const MainLayout: React.FC = () => {
       );
     }
 
+
     // If approved, render based on link targetRole and granted privileges
     const roleTitle = activeLink?.targetRole || (activeLink?.canViewRecords ? 'Restricted Access' : 'Customer Form');
 
@@ -124,12 +124,14 @@ const MainLayout: React.FC = () => {
         }`}>
           <div className="bg-purple-950/90 border-b border-purple-800/80 px-4 py-2 text-xs text-purple-300 flex items-center justify-between">
             <span className="font-bold">✓ Compliance Portal Restricted Link (Approved Access)</span>
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
-            >
-              Open Full Portal
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
+              >
+                Open Full Portal
+              </button>
+            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
             <WorkflowApprovalQueue />
@@ -146,12 +148,14 @@ const MainLayout: React.FC = () => {
         }`}>
           <div className="bg-blue-950/90 border-b border-blue-800/80 px-4 py-2 text-xs text-blue-300 flex items-center justify-between">
             <span className="font-bold">✓ Operations Desk Restricted Link (Approved Access)</span>
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs"
-            >
-              Open Full Portal
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs"
+              >
+                Open Full Portal
+              </button>
+            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
             <ClientRecordsTable />
@@ -168,12 +172,14 @@ const MainLayout: React.FC = () => {
         }`}>
           <div className="bg-amber-950/90 border-b border-amber-800/80 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
             <span className="font-bold">✓ Relationship Manager Restricted Link (Approved Access)</span>
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
-            >
-              Open Full Portal
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+              >
+                Open Full Portal
+              </button>
+            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8">
             <ClientRecordsTable />
@@ -189,12 +195,14 @@ const MainLayout: React.FC = () => {
         }`}>
           <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
             <span className="font-bold">✓ Direct Client Record View (Approved Link)</span>
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-            >
-              Open Admin Suite
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={handleReturnToAdmin}
+                className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+              >
+                Open Admin Suite
+              </button>
+            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8">
             <ClientRecordsTable />
@@ -210,12 +218,14 @@ const MainLayout: React.FC = () => {
       }`}>
         <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
           <span className="font-bold">✓ Client KYC Onboarding Form (Approved Direct Link)</span>
-          <button
-            onClick={handleReturnToAdmin}
-            className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-          >
-            Open Admin Suite
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleReturnToAdmin}
+              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+            >
+              Open Admin Suite
+            </button>
+          )}
         </div>
         <div className="max-w-5xl mx-auto p-4 sm:p-8">
           <PublicKYCForm />
@@ -237,13 +247,16 @@ const MainLayout: React.FC = () => {
             <span className="font-bold">Customer Direct Form View</span>
             <span className="hidden sm:inline text-slate-300">| Submissions send records directly to your backend dashboard in real time</span>
           </div>
-          <button
-            onClick={handleReturnToAdmin}
-            className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-sm"
-          >
-            Open Admin Suite
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleReturnToAdmin}
+              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-sm"
+            >
+              Open Admin Suite
+            </button>
+          )}
         </div>
+
 
         <div className="max-w-5xl mx-auto p-4 sm:p-8">
           <PublicKYCForm />
@@ -270,7 +283,7 @@ const MainLayout: React.FC = () => {
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <ExecutiveDashboard />;
+        return (isSuperAdmin || rolePerms.canViewDashboard) ? <ExecutiveDashboard /> : renderAccessDenied('Executive Super Admin Dashboard');
       case 'public-form':
         return (isSuperAdmin || rolePerms.canPrintForm) ? <PublicKYCForm /> : renderAccessDenied('Public KYC Portal Form');
       case 'public-status':
@@ -306,13 +319,13 @@ const MainLayout: React.FC = () => {
       case 'link-security':
         return (isSuperAdmin || rolePerms.canManagePurview) ? <LinkSharingSimulator /> : renderAccessDenied('Link Security & Sharing');
       case 'audit-trail':
-        return (isSuperAdmin || rolePerms.canViewAuditLogs) ? <AuditTrailViewer /> : renderAccessDenied('Immutable Audit Trail');
+        return (isSuperAdmin || activeRole === 'Compliance' || rolePerms.canViewAuditLogs) ? <AuditTrailViewer /> : renderAccessDenied('Immutable Audit Trail');
       case 'reports':
         return (isSuperAdmin || rolePerms.canManagePurview) ? <ReportsDashboard /> : renderAccessDenied('Reports Dashboard');
       case 'notifications':
         return <NotificationCenter />;
       default:
-        return <ExecutiveDashboard />;
+        return (isSuperAdmin || rolePerms.canViewDashboard) ? <ExecutiveDashboard /> : <WorkflowApprovalQueue />;
     }
   };
 
