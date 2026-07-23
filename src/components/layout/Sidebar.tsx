@@ -65,7 +65,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className={`w-64 shrink-0 border-r min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between transition-colors ${
-      isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+      isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-300 border-slate-400 text-slate-950'
     }`}>
       <div className="space-y-6">
 

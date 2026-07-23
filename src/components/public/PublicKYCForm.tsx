@@ -259,7 +259,7 @@ export const PublicKYCForm: React.FC = () => {
       
       {/* Banner */}
       <div className={`p-6 rounded-2xl border relative overflow-hidden shadow-lg ${
-        isDark ? 'bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border-slate-800' : 'bg-gradient-to-r from-emerald-50 via-white to-emerald-50 border-emerald-200'
+        isDark ? 'bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border-slate-800' : 'bg-slate-300 border-slate-400 text-slate-950'
       }`}>
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-center space-x-4">
@@ -276,7 +276,7 @@ export const PublicKYCForm: React.FC = () => {
               <h1 className="text-2xl font-extrabold tracking-tight">
                 {branding.companyName}
               </h1>
-              <p className="text-xs text-slate-400 mt-1 max-w-xl">
+              <p className={`text-xs mt-1 max-w-xl ${isDark ? 'text-slate-400' : 'text-slate-900'}`}>
                 Complete your enterprise Know Your Customer (KYC) onboarding form below. Upon submission, your record is automatically registered in the compliance system.
               </p>
             </div>
@@ -504,17 +504,17 @@ export const PublicKYCForm: React.FC = () => {
             <div 
               key={section.id} 
               className={`p-6 rounded-2xl border space-y-6 shadow-md ${
-                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+                isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-300 border-slate-400 text-slate-950'
               }`}
             >
               {/* Section Header */}
-              <div className="border-b pb-3 border-slate-800/80 flex items-center justify-between">
+              <div className="border-b pb-3 border-slate-400 dark:border-slate-800/80 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-emerald-400 tracking-tight">
+                  <h2 className="text-lg font-extrabold text-slate-950 dark:text-emerald-400 tracking-tight">
                     {section.title}
                   </h2>
                   {section.description && (
-                    <p className="text-xs text-slate-400 mt-0.5">{section.description}</p>
+                    <p className="text-xs text-slate-800 dark:text-slate-400 mt-0.5">{section.description}</p>
                   )}
                 </div>
               </div>
@@ -526,8 +526,8 @@ export const PublicKYCForm: React.FC = () => {
 
                   return (
                     <div key={field.id} className={field.type === 'Address' || field.type === 'Textarea' ? 'sm:col-span-2 md:col-span-3' : ''}>
-                      <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                        {field.label} {field.mandatory && <span className="text-red-400">*</span>}
+                      <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-950'}`}>
+                        {field.label} {field.mandatory && <span className="text-red-500">*</span>}
                       </label>
 
                       {/* Input Types Rendering */}

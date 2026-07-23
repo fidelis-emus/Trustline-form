@@ -71,8 +71,12 @@ export const PrintableKYCForm: React.FC = () => {
           {/* Header */}
           <div className="border-b-2 border-slate-900 pb-6 flex items-start justify-between">
             <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <Building2 className="w-8 h-8 text-emerald-800" />
+              <div className="flex items-center space-x-3">
+                {branding.logoUrl ? (
+                  <img src={branding.logoUrl} alt="Logo" className="h-10 w-auto max-w-[120px] object-contain" />
+                ) : (
+                  <Building2 className="w-8 h-8 text-emerald-800" />
+                )}
                 <h1 className="text-2xl font-black tracking-tight uppercase font-sans text-slate-900">
                   {branding.companyName}
                 </h1>

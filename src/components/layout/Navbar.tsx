@@ -63,7 +63,7 @@ export const Navbar: React.FC = () => {
     <header className={`border-b sticky top-0 z-40 transition-colors ${
       themeMode === 'dark' 
         ? 'bg-slate-900/95 border-slate-800 text-slate-100 backdrop-blur-md' 
-        : 'bg-white/95 border-slate-200 text-slate-800 backdrop-blur-md'
+        : 'bg-slate-300/95 border-slate-400 text-slate-950 backdrop-blur-md'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         

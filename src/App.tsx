@@ -2,7 +2,8 @@ import React from 'react';
 import { KYCProvider, useKYC } from './context/KYCContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, KeyRound } from 'lucide-react';
+import { RoleType } from './types/kyc';
 
 // Screen Imports
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
@@ -37,7 +38,7 @@ import { ReportsDashboard } from './components/reports/ReportsDashboard';
 import { NotificationCenter } from './components/notifications/NotificationCenter';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, themeMode, branding, activeRole, permissions } = useKYC();
+  const { activeTab, setActiveTab, themeMode, branding, activeRole, permissions, isAuthenticated } = useKYC();
   const isDark = themeMode === 'dark';
 
   const rolePerms = permissions[activeRole] || permissions['Super Admin'];
@@ -114,24 +115,107 @@ const MainLayout: React.FC = () => {
     }
 
 
-    // If approved, render based on link targetRole and granted privileges
-    const roleTitle = activeLink?.targetRole || (activeLink?.canViewRecords ? 'Restricted Access' : 'Customer Form');
+    // If approved, verify authentication for internal target roles (Compliance, Operations, Relationship Manager)
+    if (activeLink?.targetRole && activeLink.targetRole !== 'Customer' && activeLink.targetRole !== 'Public KYC Form') {
+      const requiredRole = activeLink.targetRole as RoleType;
+      if (!isAuthenticated || currentUser?.role !== requiredRole) {
+        return (
+          <div className={`min-h-screen font-sans flex items-center justify-center p-6 ${
+            isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-900 text-white'
+          }`}>
+            <div className="w-full max-w-lg p-8 rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl space-y-6 animate-in zoom-in-95">
+              <div className="flex items-center space-x-3 pb-4 border-b border-slate-800">
+                {branding.logoUrl ? (
+                  <img src={branding.logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-700 bg-black/40 p-1" />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black text-2xl">
+                    K
+                  </div>
+                )}
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center space-x-1">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>{requiredRole} Portal Login Required</span>
+                  </div>
+                  <h2 className="text-base font-black text-white">
+                    {branding.companyName || 'kyctrustlinecapital.com'}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                <span className="text-xs font-extrabold text-amber-400 block uppercase tracking-wider">
+                  Restricted Link Access Protocol
+                </span>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  You are opening an authorized link for <strong>{requiredRole}</strong>. Please log in with your active <strong>{requiredRole}</strong> portal account to proceed.
+                </p>
+              </div>
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const emailVal = (form.elements.namedItem('email') as HTMLInputElement).value;
+                const passVal = (form.elements.namedItem('password') as HTMLInputElement).value;
+                login(emailVal, passVal, requiredRole);
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    {requiredRole} Email Address
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    defaultValue={
+                      requiredRole === 'Operations' ? 'operations@aegisbank.com' :
+                      requiredRole === 'Compliance' ? 'compliance@aegisbank.com' :
+                      requiredRole === 'Relationship Manager' ? 'relationship@aegisbank.com' :
+                      'superadmin@aegisbank.com'
+                    }
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono focus:ring-2 focus:ring-emerald-500/50 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Portal Password
+                  </label>
+                  <input
+                    name="password"
+                    type="password"
+                    defaultValue={
+                      requiredRole === 'Operations' ? 'Operations#2026!' :
+                      requiredRole === 'Compliance' ? 'Compliance#2026!' :
+                      requiredRole === 'Relationship Manager' ? 'Relationship#2026!' :
+                      'SuperAdmin#2026!'
+                    }
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono focus:ring-2 focus:ring-emerald-500/50 focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-600/20"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>Authenticate & Open {requiredRole} Portal</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+    }
 
     if (activeLink?.targetRole === 'Compliance') {
       return (
         <div className={`min-h-screen font-sans ${
-          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
         }`}>
           <div className="bg-purple-950/90 border-b border-purple-800/80 px-4 py-2 text-xs text-purple-300 flex items-center justify-between">
             <span className="font-bold">✓ Compliance Portal Restricted Link (Approved Access)</span>
-            {isSuperAdmin && (
-              <button
-                onClick={handleReturnToAdmin}
-                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
-              >
-                Open Full Portal
-              </button>
-            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
             <WorkflowApprovalQueue />
@@ -144,18 +228,10 @@ const MainLayout: React.FC = () => {
     if (activeLink?.targetRole === 'Operations') {
       return (
         <div className={`min-h-screen font-sans ${
-          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
         }`}>
           <div className="bg-blue-950/90 border-b border-blue-800/80 px-4 py-2 text-xs text-blue-300 flex items-center justify-between">
             <span className="font-bold">✓ Operations Desk Restricted Link (Approved Access)</span>
-            {isSuperAdmin && (
-              <button
-                onClick={handleReturnToAdmin}
-                className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs"
-              >
-                Open Full Portal
-              </button>
-            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
             <ClientRecordsTable />
@@ -168,18 +244,10 @@ const MainLayout: React.FC = () => {
     if (activeLink?.targetRole === 'Relationship Manager') {
       return (
         <div className={`min-h-screen font-sans ${
-          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
         }`}>
           <div className="bg-amber-950/90 border-b border-amber-800/80 px-4 py-2 text-xs text-amber-300 flex items-center justify-between">
             <span className="font-bold">✓ Relationship Manager Restricted Link (Approved Access)</span>
-            {isSuperAdmin && (
-              <button
-                onClick={handleReturnToAdmin}
-                className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
-              >
-                Open Full Portal
-              </button>
-            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8">
             <ClientRecordsTable />
@@ -191,18 +259,10 @@ const MainLayout: React.FC = () => {
     if (activeLink?.canViewRecords) {
       return (
         <div className={`min-h-screen font-sans ${
-          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
         }`}>
           <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
             <span className="font-bold">✓ Direct Client Record View (Approved Link)</span>
-            {isSuperAdmin && (
-              <button
-                onClick={handleReturnToAdmin}
-                className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-              >
-                Open Admin Suite
-              </button>
-            )}
           </div>
           <div className="max-w-7xl mx-auto p-4 sm:p-8">
             <ClientRecordsTable />
@@ -214,18 +274,10 @@ const MainLayout: React.FC = () => {
     // Default approved customer form link
     return (
       <div className={`min-h-screen font-sans ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
       }`}>
         <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
           <span className="font-bold">✓ Client KYC Onboarding Form (Approved Direct Link)</span>
-          {isSuperAdmin && (
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-            >
-              Open Admin Suite
-            </button>
-          )}
         </div>
         <div className="max-w-5xl mx-auto p-4 sm:p-8">
           <PublicKYCForm />
@@ -238,7 +290,7 @@ const MainLayout: React.FC = () => {
   if (isCustomerLinkMode) {
     return (
       <div className={`min-h-screen font-sans ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
       }`}>
         {/* Subtle Admin Banner for previewing/testing direct customer form links */}
         <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
@@ -247,16 +299,7 @@ const MainLayout: React.FC = () => {
             <span className="font-bold">Customer Direct Form View</span>
             <span className="hidden sm:inline text-slate-300">| Submissions send records directly to your backend dashboard in real time</span>
           </div>
-          {isSuperAdmin && (
-            <button
-              onClick={handleReturnToAdmin}
-              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-sm"
-            >
-              Open Admin Suite
-            </button>
-          )}
         </div>
-
 
         <div className="max-w-5xl mx-auto p-4 sm:p-8">
           <PublicKYCForm />
@@ -331,7 +374,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${
-      isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
+      isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
     }`}>
       {/* Top Bar Navigation */}
       <Navbar />

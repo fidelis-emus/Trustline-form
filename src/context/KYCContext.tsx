@@ -171,7 +171,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
 
   // User Accounts & Authentication State
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
@@ -185,15 +185,18 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('kyc_current_user');
-    return saved ? JSON.parse(saved) : initialUserAccounts[0];
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const saved = localStorage.getItem('kyc_is_authenticated');
-    return saved !== null ? JSON.parse(saved) : true;
+    return saved !== null ? JSON.parse(saved) : false;
   });
 
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('kyc_is_authenticated');
+    return saved !== null ? !JSON.parse(saved) : true;
+  });
 
   useEffect(() => {
     localStorage.setItem('kyc_current_user', JSON.stringify(currentUser));

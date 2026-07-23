@@ -9,22 +9,53 @@ export const CMSBranding: React.FC = () => {
   const [formBranding, setFormBranding] = useState({ ...branding });
   const [saved, setSaved] = useState(false);
 
+  // Sync local form state when context branding updates
+  React.useEffect(() => {
+    setFormBranding({ ...branding });
+  }, [branding]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateBranding(formBranding);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const compressAndSetImage = (file: File, key: 'logoUrl' | 'auditedStatementUrl' | 'unauditedStatementUrl') => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = key === 'logoUrl' ? 400 : 1200;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.85);
+          setFormBranding(prev => ({ ...prev, [key]: compressed }));
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormBranding(prev => ({ ...prev, logoUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) compressAndSetImage(file, 'logoUrl');
   };
 
   return (
@@ -169,13 +200,7 @@ export const CMSBranding: React.FC = () => {
                       accept="image/*" 
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFormBranding(prev => ({ ...prev, auditedStatementUrl: reader.result as string }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
+                        if (file) compressAndSetImage(file, 'auditedStatementUrl');
                       }} 
                       className="hidden" 
                     />
@@ -223,13 +248,7 @@ export const CMSBranding: React.FC = () => {
                       accept="image/*" 
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setFormBranding(prev => ({ ...prev, unauditedStatementUrl: reader.result as string }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
+                        if (file) compressAndSetImage(file, 'unauditedStatementUrl');
                       }} 
                       className="hidden" 
                     />
