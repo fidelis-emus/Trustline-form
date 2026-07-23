@@ -14,7 +14,10 @@ import {
   BrandingConfig, 
   RolePermissionsMatrix, 
   SharedLink,
-  UserAccount
+  UserAccount,
+  SharedFolder,
+  SharedFolderFile,
+  FolderAccessRequest
 } from '../types/kyc';
 
 import { 
@@ -30,7 +33,10 @@ import {
   initialDocuments, 
   initialAuditLogs,
   initialUserAccounts,
-  initialEmailSettings
+  initialEmailSettings,
+  initialSharedFolders,
+  initialSharedFolderFiles,
+  initialFolderAccessRequests
 } from '../data/mockData';
 import { EmailSettings } from '../types/kyc';
 
@@ -100,6 +106,21 @@ interface KYCContextType {
   toggleLinkApproval: (id: string, approved: boolean) => void;
   deleteSharedLink: (id: string) => void;
   validateSharedLinkToken: (token: string, attemptedPassword?: string, attemptedOTP?: string) => { valid: boolean; message: string; link?: SharedLink };
+
+  // Shared Sub-Folders & Restricted Link Management
+  sharedFolders: SharedFolder[];
+  sharedFolderFiles: SharedFolderFile[];
+  folderAccessRequests: FolderAccessRequest[];
+  createSharedSubFolder: (folderData: Partial<SharedFolder>) => SharedFolder;
+  updateSharedSubFolder: (folderId: string, folderData: Partial<SharedFolder>) => void;
+  deleteSharedSubFolder: (folderId: string) => void;
+  uploadSharedFolderFile: (folderId: string, fileData: { fileName: string; fileSize: string; fileType: string; fileUrl: string; sensitivityLabel?: any; description?: string }) => SharedFolderFile;
+  deleteSharedFolderFile: (fileId: string) => void;
+  generateFolderShareLink: (folderId: string, options?: { requireApproval?: boolean; restrictedRoles?: any[]; allowedEmail?: string }) => SharedLink;
+  requestFolderAccess: (folderIdOrToken: string, requester: { name: string; email: string; role: string; reason: string }) => FolderAccessRequest;
+  approveFolderAccessRequest: (requestId: string) => void;
+  rejectFolderAccessRequest: (requestId: string) => void;
+  toggleFolderApproval: (folderId: string, approved: boolean) => void;
 
   selectedClientId: string | null;
   setSelectedClientId: (id: string | null) => void;
@@ -301,6 +322,21 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialSharedLinks;
   });
 
+  const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>(() => {
+    const saved = localStorage.getItem('kyc_shared_folders');
+    return saved ? JSON.parse(saved) : initialSharedFolders;
+  });
+
+  const [sharedFolderFiles, setSharedFolderFiles] = useState<SharedFolderFile[]>(() => {
+    const saved = localStorage.getItem('kyc_shared_folder_files');
+    return saved ? JSON.parse(saved) : initialSharedFolderFiles;
+  });
+
+  const [folderAccessRequests, setFolderAccessRequests] = useState<FolderAccessRequest[]>(() => {
+    const saved = localStorage.getItem('kyc_folder_access_requests');
+    return saved ? JSON.parse(saved) : initialFolderAccessRequests;
+  });
+
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedClientForPrint, setSelectedClientForPrint] = useState<ClientKYCRecord | null>(null);
 
@@ -318,6 +354,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { localStorage.setItem('kyc_documents', JSON.stringify(documents)); }, [documents]);
   useEffect(() => { localStorage.setItem('kyc_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
   useEffect(() => { localStorage.setItem('kyc_shared_links', JSON.stringify(sharedLinks)); }, [sharedLinks]);
+  useEffect(() => { localStorage.setItem('kyc_shared_folders', JSON.stringify(sharedFolders)); }, [sharedFolders]);
+  useEffect(() => { localStorage.setItem('kyc_shared_folder_files', JSON.stringify(sharedFolderFiles)); }, [sharedFolderFiles]);
+  useEffect(() => { localStorage.setItem('kyc_folder_access_requests', JSON.stringify(folderAccessRequests)); }, [folderAccessRequests]);
 
   // Real-time Storage Listener: auto-refresh state when CMS changes occur in any tab or window
   useEffect(() => {
@@ -330,6 +369,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (e.key === 'kyc_bank_details' && e.newValue) setCompanyBankDetails(JSON.parse(e.newValue));
         if (e.key === 'kyc_shared_links' && e.newValue) setSharedLinks(JSON.parse(e.newValue));
         if (e.key === 'kyc_clients' && e.newValue) setClients(JSON.parse(e.newValue));
+        if (e.key === 'kyc_shared_folders' && e.newValue) setSharedFolders(JSON.parse(e.newValue));
+        if (e.key === 'kyc_shared_folder_files' && e.newValue) setSharedFolderFiles(JSON.parse(e.newValue));
+        if (e.key === 'kyc_folder_access_requests' && e.newValue) setFolderAccessRequests(JSON.parse(e.newValue));
       } catch (err) {
         console.error('Error syncing storage event:', err);
       }
@@ -810,6 +852,207 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // Shared Sub-Folders Methods
+  const createSharedSubFolder = (folderData: Partial<SharedFolder>): SharedFolder => {
+    const shareToken = `SF-LINK-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    const newFolder: SharedFolder = {
+      id: `folder-${Date.now()}`,
+      name: folderData.name || 'New Shared Sub-Folder',
+      description: folderData.description || 'Restricted shared repository',
+      createdAt: timestamp,
+      createdBy: activeRole,
+      restrictedRoles: folderData.restrictedRoles || ['Operations', 'Compliance'],
+      allowedEmails: folderData.allowedEmails || [],
+      requireApproval: folderData.requireApproval !== undefined ? folderData.requireApproval : true,
+      shareToken,
+      isApproved: folderData.isApproved !== undefined ? folderData.isApproved : false, // Restricted by default, requires approval
+      allowUploads: folderData.allowUploads !== undefined ? folderData.allowUploads : true,
+      accessCount: 0
+    };
+
+    setSharedFolders(prev => [newFolder, ...prev]);
+
+    // Create corresponding shared link entry for unified tracking
+    createSharedLink({
+      title: `Sub-Folder Link: ${newFolder.name}`,
+      linkType: 'Shared Sub-Folder Link',
+      targetRole: (newFolder.restrictedRoles[0] as any) || 'External User',
+      folderId: newFolder.id,
+      createdBy: activeRole,
+      expiresAt: '2026-12-31 23:59:59',
+      recipientName: `Restricted: ${newFolder.restrictedRoles.join(', ')}`,
+      maxDownloads: 500,
+      isActive: true,
+      isApproved: newFolder.isApproved,
+      canDownloadDocs: true
+    });
+
+    addAuditLog({
+      user: activeRole,
+      role: activeRole,
+      action: 'Share Link Generated',
+      target: `Sub-Folder: ${newFolder.name}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Created sub-folder "${newFolder.name}" restricted to roles (${newFolder.restrictedRoles.join(', ')}). Approval required: ${newFolder.requireApproval ? 'YES' : 'NO'}.`,
+      status: 'Success'
+    });
+
+    return newFolder;
+  };
+
+  const updateSharedSubFolder = (folderId: string, folderData: Partial<SharedFolder>) => {
+    setSharedFolders(prev => prev.map(f => f.id === folderId ? { ...f, ...folderData } : f));
+  };
+
+  const deleteSharedSubFolder = (folderId: string) => {
+    setSharedFolders(prev => prev.filter(f => f.id !== folderId));
+    setSharedFolderFiles(prev => prev.filter(file => file.folderId !== folderId));
+  };
+
+  const uploadSharedFolderFile = (folderId: string, fileData: { fileName: string; fileSize: string; fileType: string; fileUrl: string; sensitivityLabel?: any; description?: string }): SharedFolderFile => {
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const newFile: SharedFolderFile = {
+      id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      folderId,
+      fileName: fileData.fileName,
+      fileSize: fileData.fileSize,
+      fileType: fileData.fileType || 'application/pdf',
+      uploadDate: timestamp,
+      uploadedBy: activeRole,
+      fileUrl: fileData.fileUrl,
+      sensitivityLabel: fileData.sensitivityLabel || 'Confidential',
+      description: fileData.description || 'Uploaded file'
+    };
+
+    setSharedFolderFiles(prev => [newFile, ...prev]);
+
+    addAuditLog({
+      user: activeRole,
+      role: activeRole,
+      action: 'Document Upload',
+      target: `Sub-Folder File: ${newFile.fileName}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Uploaded file "${newFile.fileName}" (${newFile.fileSize}) into shared sub-folder ID: ${folderId}`,
+      status: 'Success'
+    });
+
+    return newFile;
+  };
+
+  const deleteSharedFolderFile = (fileId: string) => {
+    setSharedFolderFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const generateFolderShareLink = (folderId: string, options?: { requireApproval?: boolean; restrictedRoles?: any[]; allowedEmail?: string }): SharedLink => {
+    const folder = sharedFolders.find(f => f.id === folderId);
+    const folderName = folder ? folder.name : 'Shared Sub-Folder';
+
+    return createSharedLink({
+      title: `Sub-Folder Access: ${folderName}`,
+      linkType: 'Shared Sub-Folder Link',
+      targetRole: (options?.restrictedRoles?.[0] as any) || (folder?.restrictedRoles?.[0] as any) || 'External User',
+      folderId,
+      createdBy: activeRole,
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+      recipientName: options?.allowedEmail || `Restricted Recipient (${folderName})`,
+      allowedEmail: options?.allowedEmail,
+      maxDownloads: 500,
+      isActive: true,
+      isApproved: options?.requireApproval === false ? true : false, // Restricted link requires approval
+      canDownloadDocs: true
+    });
+  };
+
+  const requestFolderAccess = (folderIdOrToken: string, requester: { name: string; email: string; role: string; reason: string }): FolderAccessRequest => {
+    const folder = sharedFolders.find(f => f.id === folderIdOrToken || f.shareToken === folderIdOrToken);
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    const newReq: FolderAccessRequest = {
+      id: `req-${Date.now()}`,
+      folderId: folder?.id || folderIdOrToken,
+      folderName: folder?.name || 'Restricted Sub-Folder',
+      token: folder?.shareToken || folderIdOrToken,
+      requesterName: requester.name,
+      requesterEmail: requester.email,
+      requesterRole: requester.role,
+      reason: requester.reason,
+      requestedAt: timestamp,
+      status: 'Pending'
+    };
+
+    setFolderAccessRequests(prev => [newReq, ...prev]);
+
+    addAuditLog({
+      user: requester.name,
+      role: 'Operations',
+      action: 'Access Denied Attempt',
+      target: `Folder Access Request: ${newReq.folderName}`,
+      ipAddress: '197.210.10.5',
+      browser: 'Chrome 126.0',
+      os: 'Windows 11',
+      device: 'Workstation',
+      details: `Approval request submitted by ${requester.name} (${requester.email}) for restricted sub-folder "${newReq.folderName}". Awaiting SuperAdmin approval.`,
+      status: 'Warning'
+    });
+
+    return newReq;
+  };
+
+  const approveFolderAccessRequest = (requestId: string) => {
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    setFolderAccessRequests(prev => prev.map(r => {
+      if (r.id === requestId) {
+        toggleFolderApproval(r.folderId, true);
+        return {
+          ...r,
+          status: 'Approved',
+          reviewedBy: activeRole,
+          reviewedAt: timestamp
+        };
+      }
+      return r;
+    }));
+  };
+
+  const rejectFolderAccessRequest = (requestId: string) => {
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    setFolderAccessRequests(prev => prev.map(r => {
+      if (r.id === requestId) {
+        return {
+          ...r,
+          status: 'Rejected',
+          reviewedBy: activeRole,
+          reviewedAt: timestamp
+        };
+      }
+      return r;
+    }));
+  };
+
+  const toggleFolderApproval = (folderId: string, approved: boolean) => {
+    setSharedFolders(prev => prev.map(f => {
+      if (f.id === folderId || f.shareToken === folderId) {
+        return { ...f, isApproved: approved };
+      }
+      return f;
+    }));
+
+    setSharedLinks(prev => prev.map(l => {
+      if (l.folderId === folderId || l.token === folderId) {
+        return { ...l, isApproved: approved, approvedBy: activeRole };
+      }
+      return l;
+    }));
+  };
+
   const validateSharedLinkToken = (token: string, attemptedPassword?: string, attemptedOTP?: string) => {
     const link = sharedLinks.find(l => l.token === token || token.includes(l.token));
     if (!link) {
@@ -1284,6 +1527,19 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toggleLinkApproval,
       deleteSharedLink,
       validateSharedLinkToken,
+      sharedFolders,
+      sharedFolderFiles,
+      folderAccessRequests,
+      createSharedSubFolder,
+      updateSharedSubFolder,
+      deleteSharedSubFolder,
+      uploadSharedFolderFile,
+      deleteSharedFolderFile,
+      generateFolderShareLink,
+      requestFolderAccess,
+      approveFolderAccessRequest,
+      rejectFolderAccessRequest,
+      toggleFolderApproval,
       selectedClientId,
       setSelectedClientId,
       selectedClientForPrint,

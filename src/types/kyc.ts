@@ -276,13 +276,57 @@ export interface BrandingConfig {
   unauditedStatementUrl?: string;
 }
 
+export interface SharedFolderFile {
+  id: string;
+  folderId: string;
+  fileName: string;
+  fileSize: string;
+  fileType: string;
+  uploadDate: string;
+  uploadedBy: string;
+  fileUrl: string;
+  sensitivityLabel?: 'Confidential' | 'Highly Confidential' | 'Internal' | 'Restricted';
+  description?: string;
+}
+
+export interface SharedFolder {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+  restrictedRoles: (RoleType | 'External User')[];
+  allowedEmails?: string[];
+  requireApproval: boolean;
+  shareToken: string;
+  isApproved: boolean; // Superadmin approval status for public link access
+  allowUploads: boolean; // Allow recipients with link to upload files
+  accessCount: number;
+}
+
+export interface FolderAccessRequest {
+  id: string;
+  folderId: string;
+  folderName: string;
+  token: string;
+  requesterName: string;
+  requesterEmail: string;
+  requesterRole: string;
+  reason: string;
+  requestedAt: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
+
 export interface SharedLink {
   id: string;
   token: string;
   title: string;
-  linkType: 'Public KYC Form' | 'Client Record Access' | 'Document Vault Download' | 'Custom Portal Link' | 'Restricted Role Link';
-  targetRole?: RoleType | 'Customer';
+  linkType: 'Public KYC Form' | 'Client Record Access' | 'Document Vault Download' | 'Custom Portal Link' | 'Restricted Role Link' | 'Shared Sub-Folder Link';
+  targetRole?: RoleType | 'Customer' | 'External User';
   clientId?: string;
+  folderId?: string; // Links directly to a shared sub-folder
   recipientName?: string;
   createdBy: string;
   createdAt: string;

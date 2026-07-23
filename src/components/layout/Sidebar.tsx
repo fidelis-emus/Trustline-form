@@ -33,6 +33,7 @@ export const Sidebar: React.FC = () => {
     { id: 'dashboard', label: 'Executive Dashboard', icon: LayoutDashboard, show: isSuperAdmin || rolePerms.canViewDashboard },
     { id: 'records', label: 'Client Records & Lifecycle', icon: Users, show: rolePerms.canViewClients },
     { id: 'workflow', label: 'Workflow & Approvals', icon: GitPullRequest, show: rolePerms.canApproveReject },
+    { id: 'shared-folders', label: 'Shared Sub-Folders & Links', icon: FolderLock, show: isSuperAdmin || rolePerms.canManagePurview },
     { id: 'documents', label: 'SharePoint Document Vault', icon: FolderLock, show: rolePerms.canViewClients && rolePerms.canDownloadDocs },
   ];
 
@@ -64,7 +65,7 @@ export const Sidebar: React.FC = () => {
   const isDark = themeMode === 'dark';
 
   return (
-    <aside className={`w-64 shrink-0 border-r min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between transition-colors ${
+    <aside className={`w-64 shrink-0 border-r min-h-[calc(100vh-4rem)] p-4 flex-col justify-between transition-colors hidden md:flex ${
       isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-300 border-slate-400 text-slate-950'
     }`}>
       <div className="space-y-6">

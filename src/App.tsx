@@ -31,6 +31,8 @@ import { SecureLoginModal } from './components/auth/SecureLoginModal';
 
 // Other Modules
 import { SharePointDocVault } from './components/documents/SharePointDocVault';
+import { SharedFolderVault } from './components/documents/SharedFolderVault';
+import { PublicFolderAccess } from './components/public/PublicFolderAccess';
 import { WorkflowApprovalQueue } from './components/workflow/WorkflowApprovalQueue';
 import { LinkSharingSimulator } from './components/security/LinkSharingSimulator';
 import { AuditTrailViewer } from './components/audit/AuditTrailViewer';
@@ -38,7 +40,7 @@ import { ReportsDashboard } from './components/reports/ReportsDashboard';
 import { NotificationCenter } from './components/notifications/NotificationCenter';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, themeMode, branding, activeRole, permissions, isAuthenticated } = useKYC();
+  const { activeTab, setActiveTab, themeMode, branding, activeRole, permissions, isAuthenticated, currentUser, login, sharedLinks, validateSharedLinkToken } = useKYC();
   const isDark = themeMode === 'dark';
 
   const rolePerms = permissions[activeRole] || permissions['Super Admin'];
@@ -47,24 +49,45 @@ const MainLayout: React.FC = () => {
   // Check if opening direct shareable customer form link or shared token link
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const tokenParam = urlParams.get('token');
+  const folderTokenParam = urlParams.get('folderToken') || (tokenParam && (tokenParam.startsWith('SF-LINK-') || tokenParam.includes('folder')) ? tokenParam : null);
 
   const isCustomerLinkMode = typeof window !== 'undefined' && (
     window.location.search.includes('mode=customer_form') ||
     window.location.hash === '#customer-form'
   );
 
-  const { sharedLinks, validateSharedLinkToken } = useKYC();
-
   const handleReturnToAdmin = () => {
     window.history.pushState({}, '', window.location.pathname);
     setActiveTab('dashboard');
   };
 
+  // If a shared sub-folder token is present in the URL
+  if (folderTokenParam) {
+    return (
+      <div className={`min-h-screen font-sans p-4 sm:p-8 ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
+      }`}>
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+            <button
+              onClick={handleReturnToAdmin}
+              className="text-xs text-slate-400 hover:text-white font-bold flex items-center space-x-1"
+            >
+              <span>← Return to System Dashboard</span>
+            </button>
+            <span className="text-xs font-mono text-slate-500">Sub-Folder Access Portal</span>
+          </div>
+          <PublicFolderAccess folderToken={folderTokenParam} />
+        </div>
+      </div>
+    );
+  }
+
   // If token is present in URL
   if (tokenParam) {
     const activeLink = sharedLinks.find(l => l.token === tokenParam);
-    const isCustomerLink = activeLink?.targetRole === 'Customer' || activeLink?.linkType === 'Public KYC Form';
-    const isApproved = activeLink?.isApproved || isCustomerLink;
+    const isCustomerLink = activeLink?.targetRole === 'Customer' || activeLink?.linkType === 'Public KYC Form' || activeLink?.canFillForm;
+    const isApproved = activeLink ? (activeLink.isApproved || isCustomerLink) : true;
 
     if (!isApproved) {
       return (
@@ -109,6 +132,22 @@ const MainLayout: React.FC = () => {
             >
               Return to Main Portal
             </button>
+          </div>
+        </div>
+      );
+    }
+
+    // If customer/client form link, render directly with zero restrictions
+    if (isCustomerLink || !activeLink || activeLink.targetRole === 'Customer' || activeLink.linkType === 'Public KYC Form') {
+      return (
+        <div className={`min-h-screen font-sans ${
+          isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
+        }`}>
+          <div className="bg-emerald-950/90 border-b border-emerald-800/80 px-4 py-2 text-xs text-emerald-300 flex items-center justify-between">
+            <span className="font-bold">✓ Client KYC Onboarding Form (Direct Unrestricted Link)</span>
+          </div>
+          <div className="max-w-5xl mx-auto p-4 sm:p-8">
+            <PublicKYCForm />
           </div>
         </div>
       );
@@ -355,6 +394,9 @@ const MainLayout: React.FC = () => {
         return (isSuperAdmin || rolePerms.canBackupRestore) ? <CMSBackupRestore /> : renderAccessDenied('Backup & Restore Engine');
       case 'documents':
         return (isSuperAdmin || (rolePerms.canViewClients && rolePerms.canDownloadDocs)) ? <SharePointDocVault /> : renderAccessDenied('SharePoint Document Vault');
+      case 'shared-folders':
+      case 'shared-subfolders':
+        return (isSuperAdmin || rolePerms.canManagePurview) ? <SharedFolderVault /> : renderAccessDenied('SuperAdmin Shared Sub-Folders');
       case 'workflow':
       case 'workflow-queue':
         return (isSuperAdmin || rolePerms.canApproveReject) ? <WorkflowApprovalQueue /> : renderAccessDenied('Workflow Approval Queue');
@@ -371,6 +413,17 @@ const MainLayout: React.FC = () => {
         return (isSuperAdmin || rolePerms.canViewDashboard) ? <ExecutiveDashboard /> : <WorkflowApprovalQueue />;
     }
   };
+
+  // Force Login Page for unauthenticated users visiting the main app / subdomain
+  if (!isAuthenticated && !isCustomerLinkMode && !tokenParam) {
+    return (
+      <div className={`min-h-screen font-sans flex items-center justify-center p-4 transition-colors ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-950'
+      }`}>
+        <SecureLoginModal />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${

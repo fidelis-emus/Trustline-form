@@ -16,7 +16,15 @@ import {
   LogOut,
   KeyRound,
   User,
-  Shield
+  Shield,
+  Menu,
+  LayoutDashboard,
+  Users,
+  GitPullRequest,
+  FolderLock,
+  Sliders,
+  ShieldAlert,
+  FileText
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -27,15 +35,21 @@ export const Navbar: React.FC = () => {
     toggleTheme, 
     branding, 
     auditLogs,
+    activeTab,
     setActiveTab,
     currentUser,
     isAuthenticated,
     logout,
-    setIsLoginModalOpen
+    setIsLoginModalOpen,
+    permissions
   } = useKYC();
 
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const rolePerms = permissions[activeRole] || permissions['Super Admin'];
+  const isSuperAdmin = activeRole === 'Super Admin';
 
   const roles: RoleType[] = [
     'Super Admin',
@@ -69,6 +83,19 @@ export const Navbar: React.FC = () => {
         
         {/* Left: Logo & Company Title */}
         <div className="flex items-center space-x-3">
+          {/* Mobile Menu Hamburger Toggle Button */}
+          <button
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            className={`p-2 rounded-lg border md:hidden transition-colors ${
+              themeMode === 'dark'
+                ? 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'
+                : 'bg-slate-200 border-slate-400 text-slate-900 hover:bg-slate-300'
+            }`}
+            aria-label="Toggle Mobile Navigation Menu"
+          >
+            {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+
           <div className="h-10 w-10 rounded-lg bg-slate-300 dark:bg-slate-700 border border-slate-400 dark:border-slate-600 flex items-center justify-center text-slate-800 dark:text-slate-100 shadow-md overflow-hidden shrink-0 p-0.5">
             {branding.logoUrl ? (
               <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-contain filter drop-shadow-sm" />
@@ -78,13 +105,9 @@ export const Navbar: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="font-bold text-base sm:text-lg tracking-tight truncate max-w-xs sm:max-w-md">
+              <h1 className="font-bold text-base sm:text-lg tracking-tight truncate max-w-[140px] xs:max-w-xs sm:max-w-md">
                 {branding.companyName}
               </h1>
-              <span className="hidden">
-                <ShieldCheck className="w-3 h-3 mr-1" />
-                M365 SharePoint Online
-              </span>
             </div>
             <p className="text-xs text-slate-400 font-medium hidden sm:block">
               {branding.headerTitle}
@@ -276,6 +299,154 @@ export const Navbar: React.FC = () => {
               >
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Drawer Menu Navigation */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+          />
+
+          <div className={`relative w-4/5 max-w-xs h-full border-r p-5 flex flex-col justify-between overflow-y-auto shadow-2xl z-10 transition-all ${
+            themeMode === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-200 border-slate-400 text-slate-950'
+          }`}>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-400 dark:border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-sm">
+                    K
+                  </div>
+                  <span className="font-bold text-sm tracking-tight">{branding.companyName}</span>
+                </div>
+                <button
+                  onClick={() => setMobileNavOpen(false)}
+                  className="p-1 rounded-lg border border-slate-400 dark:border-slate-700 hover:bg-slate-300 dark:hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation Items */}
+              <div className="space-y-4 text-xs font-medium">
+                <div>
+                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">Core Navigation</h3>
+                  <div className="space-y-1">
+                    {(isSuperAdmin || rolePerms.canViewDashboard) && (
+                      <button
+                        onClick={() => { setActiveTab('dashboard'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <LayoutDashboard className="w-4 h-4" />
+                        <span>Executive Dashboard</span>
+                      </button>
+                    )}
+                    {rolePerms.canViewClients && (
+                      <button
+                        onClick={() => { setActiveTab('records'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'records' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>Client Records & Lifecycle</span>
+                      </button>
+                    )}
+                    {rolePerms.canApproveReject && (
+                      <button
+                        onClick={() => { setActiveTab('workflow'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'workflow' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <GitPullRequest className="w-4 h-4" />
+                        <span>Workflow Approvals</span>
+                      </button>
+                    )}
+                    {(rolePerms.canViewClients && rolePerms.canDownloadDocs) && (
+                      <button
+                        onClick={() => { setActiveTab('documents'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'documents' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <FolderLock className="w-4 h-4" />
+                        <span>SharePoint Document Vault</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">Public Forms & Status</h3>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => { setActiveTab('public-form'); setMobileNavOpen(false); }}
+                      className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'public-form' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Public KYC Form</span>
+                    </button>
+                    <button
+                      onClick={() => { setActiveTab('public-status'); setMobileNavOpen(false); }}
+                      className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'public-status' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>KYC Status Checker</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">CMS & Security</h3>
+                  <div className="space-y-1">
+                    {(isSuperAdmin || rolePerms.canManagePermissions) && (
+                      <button
+                        onClick={() => { setActiveTab('cms-users'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'cms-users' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <KeyRound className="w-4 h-4" />
+                        <span>User Accounts</span>
+                      </button>
+                    )}
+                    {(isSuperAdmin || rolePerms.canEditCMS) && (
+                      <button
+                        onClick={() => { setActiveTab('cms-formbuilder'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'cms-formbuilder' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <Sliders className="w-4 h-4" />
+                        <span>Form Builder</span>
+                      </button>
+                    )}
+                    {(isSuperAdmin || rolePerms.canManagePurview) && (
+                      <button
+                        onClick={() => { setActiveTab('link-sharing'); setMobileNavOpen(false); }}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'link-sharing' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
+                      >
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>Link Security</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-400 dark:border-slate-800 space-y-2">
+              <button
+                onClick={() => { setIsLoginModalOpen(true); setMobileNavOpen(false); }}
+                className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Switch Portal / Role</span>
+              </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => { logout(); setMobileNavOpen(false); }}
+                  className="w-full py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs flex items-center justify-center space-x-2 border border-red-500/30"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Log Out</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

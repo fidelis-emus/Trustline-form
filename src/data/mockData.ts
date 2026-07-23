@@ -266,3 +266,124 @@ export const initialUserAccounts: UserAccount[] = [
     branch: 'Ikoyi Private Client Hub'
   }
 ];
+
+export const initialSharedFolders: any[] = [
+  {
+    id: 'folder-ops-1',
+    name: 'External Operations Desk Vault',
+    description: 'Shared repository for trade confirmations, operational mandates, and clearing receipts.',
+    createdAt: '2026-07-01 10:00:00',
+    createdBy: 'Super Admin',
+    restrictedRoles: ['Operations'],
+    requireApproval: true,
+    shareToken: 'subfolder_ops_8021',
+    isApproved: true,
+    allowUploads: true,
+    accessCount: 14
+  },
+  {
+    id: 'folder-rm-1',
+    name: 'Relationship Management Wealth Desk',
+    description: 'Private wealth onboarding kits, HNW client agreements, and referral rate cards.',
+    createdAt: '2026-07-05 11:30:00',
+    createdBy: 'Super Admin',
+    restrictedRoles: ['Relationship Manager'],
+    requireApproval: true,
+    shareToken: 'subfolder_rm_3019',
+    isApproved: true,
+    allowUploads: true,
+    accessCount: 22
+  },
+  {
+    id: 'folder-comp-1',
+    name: 'Compliance Audit & AML Regulatory Sub-Folder',
+    description: 'Restricted AML risk assessments, PEP screening logs, and regulatory audit filings.',
+    createdAt: '2026-07-10 14:15:00',
+    createdBy: 'Super Admin',
+    restrictedRoles: ['Compliance'],
+    requireApproval: true,
+    shareToken: 'subfolder_comp_5540',
+    isApproved: true,
+    allowUploads: false,
+    accessCount: 9
+  },
+  {
+    id: 'folder-external-1',
+    name: 'External Partner Client Dropzone',
+    description: 'Restricted folder for external corporate partners to submit identity documents and tax certificates.',
+    createdAt: '2026-07-15 09:00:00',
+    createdBy: 'Super Admin',
+    restrictedRoles: ['External User'],
+    requireApproval: true,
+    shareToken: 'subfolder_ext_9912',
+    isApproved: false, // Requires SuperAdmin Approval
+    allowUploads: true,
+    accessCount: 3
+  }
+];
+
+export const initialSharedFolderFiles: any[] = [
+  {
+    id: 'file-101',
+    folderId: 'folder-ops-1',
+    fileName: 'Operations_Trade_Execution_Mandate_2026.pdf',
+    fileSize: '2.4 MB',
+    fileType: 'application/pdf',
+    uploadDate: '2026-07-01 10:15:00',
+    uploadedBy: 'Super Admin',
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1000&auto=format&fit=crop&q=80',
+    sensitivityLabel: 'Confidential',
+    description: 'Standard operational clearing instructions and bank settlement details.'
+  },
+  {
+    id: 'file-102',
+    folderId: 'folder-ops-1',
+    fileName: 'Clearing_Settlement_Standard_Procedure.pdf',
+    fileSize: '1.8 MB',
+    fileType: 'application/pdf',
+    uploadDate: '2026-07-02 11:20:00',
+    uploadedBy: 'Super Admin',
+    fileUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1000&auto=format&fit=crop&q=80',
+    sensitivityLabel: 'Internal',
+    description: 'Step-by-step settlement flow for operations officers.'
+  },
+  {
+    id: 'file-201',
+    folderId: 'folder-rm-1',
+    fileName: 'HNW_Private_Wealth_Onboarding_Kit.pdf',
+    fileSize: '3.1 MB',
+    fileType: 'application/pdf',
+    uploadDate: '2026-07-05 12:00:00',
+    uploadedBy: 'Super Admin',
+    fileUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1000&auto=format&fit=crop&q=80',
+    sensitivityLabel: 'Highly Confidential',
+    description: 'Exclusive portfolio allocation guidelines for Relationship Managers.'
+  },
+  {
+    id: 'file-301',
+    folderId: 'folder-comp-1',
+    fileName: 'AML_Risk_Assessment_Report_Q2_2026.pdf',
+    fileSize: '4.5 MB',
+    fileType: 'application/pdf',
+    uploadDate: '2026-07-10 14:30:00',
+    uploadedBy: 'Super Admin',
+    fileUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=1000&auto=format&fit=crop&q=80',
+    sensitivityLabel: 'Restricted',
+    description: 'Quarterly compliance audit and sanction list cross-checks.'
+  }
+];
+
+export const initialFolderAccessRequests: any[] = [
+  {
+    id: 'req-801',
+    folderId: 'folder-external-1',
+    folderName: 'External Partner Client Dropzone',
+    token: 'subfolder_ext_9912',
+    requesterName: 'Marcus Vance (Apex Capital)',
+    requesterEmail: 'marcus.vance@apexcap.com',
+    requesterRole: 'External Partner / Auditor',
+    reason: 'Urgent submission of corporate tax clearance and director passports for onboarding.',
+    requestedAt: '2026-07-22 16:40:00',
+    status: 'Pending'
+  }
+];
