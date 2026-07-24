@@ -41,11 +41,12 @@ export const Navbar: React.FC = () => {
     isAuthenticated,
     logout,
     setIsLoginModalOpen,
-    permissions
+    permissions,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen
   } = useKYC();
 
   const [showLinkModal, setShowLinkModal] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const rolePerms = permissions[activeRole] || permissions['Super Admin'];
@@ -85,15 +86,15 @@ export const Navbar: React.FC = () => {
         <div className="flex items-center space-x-3">
           {/* Mobile Menu Hamburger Toggle Button */}
           <button
-            onClick={() => setMobileNavOpen(!mobileNavOpen)}
-            className={`p-2 rounded-lg border md:hidden transition-colors ${
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className={`p-2 rounded-xl border lg:hidden transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
               themeMode === 'dark'
                 ? 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'
                 : 'bg-slate-200 border-slate-400 text-slate-900 hover:bg-slate-300'
             }`}
             aria-label="Toggle Mobile Navigation Menu"
           >
-            {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           <div className="h-10 w-10 rounded-lg bg-slate-300 dark:bg-slate-700 border border-slate-400 dark:border-slate-600 flex items-center justify-center text-slate-800 dark:text-slate-100 shadow-md overflow-hidden shrink-0 p-0.5">
@@ -128,34 +129,20 @@ export const Navbar: React.FC = () => {
             <span className="hidden sm:inline">Generate Form Link</span>
           </button>
 
-          {/* Active Role Selector with URL Path Routing */}
-          <div className="hidden items-center space-x-2 bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/80 shadow-sm">
-            <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div className="flex flex-col">
-              <div className="flex items-center space-x-1.5">
+          {/* Active Role Indicator */}
+          {isAuthenticated && (
+            <div className="hidden md:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/80 shadow-sm">
+              <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="flex flex-col">
                 <span className="text-[9px] uppercase font-extrabold text-slate-400 tracking-wider leading-none">
-                  Active Role
+                  Authenticated Role
                 </span>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30 font-bold">
-                  {activeRole === 'Super Admin' && '/superadmin'}
-                  {activeRole === 'Relationship Manager' && '/relationship'}
-                  {activeRole === 'Operations' && '/operations'}
-                  {activeRole === 'Compliance' && '/compliance'}
+                <span className="text-xs font-bold text-emerald-300 mt-0.5">
+                  {activeRole}
                 </span>
               </div>
-              <select
-                value={activeRole}
-                onChange={(e) => setActiveRole(e.target.value as RoleType)}
-                className="bg-transparent text-xs font-bold text-emerald-300 focus:outline-none cursor-pointer pr-1 mt-0.5"
-              >
-                {roles.map(r => (
-                  <option key={r} value={r} className="bg-slate-900 text-slate-200 font-semibold">
-                    {r} ({r === 'Super Admin' ? '/superadmin' : r === 'Relationship Manager' ? '/relationship' : r === 'Operations' ? '/operations' : '/compliance'})
-                  </option>
-                ))}
-              </select>
             </div>
-          </div>
+          )}
 
           {/* Security Alert Badge */}
           {recentDeniedCount > 0 && (
@@ -170,13 +157,11 @@ export const Navbar: React.FC = () => {
             </div>
           )}
 
-          {/* User Profile & Portal Switcher Badge */}
+          {/* User Profile & Logout */}
           {isAuthenticated && currentUser ? (
             <div className="flex items-center space-x-2 pl-1 border-l border-slate-700/60">
               <div 
-                onClick={() => setIsLoginModalOpen(true)}
-                className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 cursor-pointer transition-all"
-                title="Click to Switch Portal or Change Account"
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80"
               >
                 <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs font-black">
                   {currentUser.name.substring(0, 1)}
@@ -188,20 +173,12 @@ export const Navbar: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setIsLoginModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all hidden sm:flex items-center space-x-1"
-                title="Switch Portal Access (Super Admin, Operations, Compliance, Relationship)"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                <span>Switch Portal</span>
-              </button>
-
-              <button
-                onClick={logout}
-                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                onClick={() => logout()}
+                className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all flex items-center space-x-1.5"
                 title="Log Out of Portal"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Log Out</span>
               </button>
             </div>
           ) : (
@@ -210,7 +187,7 @@ export const Navbar: React.FC = () => {
               className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition-all shadow-md flex items-center space-x-1.5"
             >
               <KeyRound className="w-3.5 h-3.5" />
-              <span>Portal Login</span>
+              <span>Sign In</span>
             </button>
           )}
 
@@ -299,154 +276,6 @@ export const Navbar: React.FC = () => {
               >
                 Done
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Drawer Menu Navigation */}
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setMobileNavOpen(false)}
-          />
-
-          <div className={`relative w-4/5 max-w-xs h-full border-r p-5 flex flex-col justify-between overflow-y-auto shadow-2xl z-10 transition-all ${
-            themeMode === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-200 border-slate-400 text-slate-950'
-          }`}>
-            <div className="space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-400 dark:border-slate-800">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-sm">
-                    K
-                  </div>
-                  <span className="font-bold text-sm tracking-tight">{branding.companyName}</span>
-                </div>
-                <button
-                  onClick={() => setMobileNavOpen(false)}
-                  className="p-1 rounded-lg border border-slate-400 dark:border-slate-700 hover:bg-slate-300 dark:hover:bg-slate-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Navigation Items */}
-              <div className="space-y-4 text-xs font-medium">
-                <div>
-                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">Core Navigation</h3>
-                  <div className="space-y-1">
-                    {(isSuperAdmin || rolePerms.canViewDashboard) && (
-                      <button
-                        onClick={() => { setActiveTab('dashboard'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <LayoutDashboard className="w-4 h-4" />
-                        <span>Executive Dashboard</span>
-                      </button>
-                    )}
-                    {rolePerms.canViewClients && (
-                      <button
-                        onClick={() => { setActiveTab('records'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'records' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <Users className="w-4 h-4" />
-                        <span>Client Records & Lifecycle</span>
-                      </button>
-                    )}
-                    {rolePerms.canApproveReject && (
-                      <button
-                        onClick={() => { setActiveTab('workflow'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'workflow' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <GitPullRequest className="w-4 h-4" />
-                        <span>Workflow Approvals</span>
-                      </button>
-                    )}
-                    {(rolePerms.canViewClients && rolePerms.canDownloadDocs) && (
-                      <button
-                        onClick={() => { setActiveTab('documents'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'documents' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <FolderLock className="w-4 h-4" />
-                        <span>SharePoint Document Vault</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">Public Forms & Status</h3>
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => { setActiveTab('public-form'); setMobileNavOpen(false); }}
-                      className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'public-form' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>Public KYC Form</span>
-                    </button>
-                    <button
-                      onClick={() => { setActiveTab('public-status'); setMobileNavOpen(false); }}
-                      className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'public-status' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>KYC Status Checker</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">CMS & Security</h3>
-                  <div className="space-y-1">
-                    {(isSuperAdmin || rolePerms.canManagePermissions) && (
-                      <button
-                        onClick={() => { setActiveTab('cms-users'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'cms-users' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <KeyRound className="w-4 h-4" />
-                        <span>User Accounts</span>
-                      </button>
-                    )}
-                    {(isSuperAdmin || rolePerms.canEditCMS) && (
-                      <button
-                        onClick={() => { setActiveTab('cms-formbuilder'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'cms-formbuilder' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <Sliders className="w-4 h-4" />
-                        <span>Form Builder</span>
-                      </button>
-                    )}
-                    {(isSuperAdmin || rolePerms.canManagePurview) && (
-                      <button
-                        onClick={() => { setActiveTab('link-sharing'); setMobileNavOpen(false); }}
-                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg ${activeTab === 'link-sharing' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-300 dark:hover:bg-slate-800'}`}
-                      >
-                        <ShieldAlert className="w-4 h-4" />
-                        <span>Link Security</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-400 dark:border-slate-800 space-y-2">
-              <button
-                onClick={() => { setIsLoginModalOpen(true); setMobileNavOpen(false); }}
-                className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow"
-              >
-                <KeyRound className="w-4 h-4" />
-                <span>Switch Portal / Role</span>
-              </button>
-              {isAuthenticated && (
-                <button
-                  onClick={() => { logout(); setMobileNavOpen(false); }}
-                  className="w-full py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs flex items-center justify-center space-x-2 border border-red-500/30"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Log Out</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

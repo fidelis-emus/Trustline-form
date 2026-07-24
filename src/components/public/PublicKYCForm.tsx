@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useKYC } from '../../context/KYCContext';
 import { 
   Building2, 
@@ -12,13 +12,20 @@ import {
   CreditCard, 
   ArrowRight,
   FileText,
-  Printer,
   Copy,
   Check,
   MessageSquare,
   Phone,
-  Mail
+  Mail,
+  MapPin,
+  Globe,
+  Save,
+  RotateCcw,
+  Clock,
+  ExternalLink
 } from 'lucide-react';
+
+const DRAFT_KEY = 'kyc_public_form_draft_v2';
 
 export const PublicKYCForm: React.FC = () => {
   const { 
@@ -30,7 +37,6 @@ export const PublicKYCForm: React.FC = () => {
     officers, 
     emailSettings,
     addClientRecord, 
-    setSelectedClientForPrint,
     themeMode 
   } = useKYC();
 
@@ -67,15 +73,96 @@ export const PublicKYCForm: React.FC = () => {
   const [submittedClientNum, setSubmittedClientNum] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Draft Preservation States
+  const [draftLastSaved, setDraftLastSaved] = useState<string | null>(null);
+  const [showRestoredNotice, setShowRestoredNotice] = useState<boolean>(false);
+
   // Financial Statements Modal Reader state
   const [activeModalImage, setActiveModalImage] = useState<{ title: string; url: string } | null>(null);
   const [confirmedReadFinancials, setConfirmedReadFinancials] = useState<boolean>(false);
 
+  // Load saved draft on mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_KEY);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.formData && Object.keys(parsed.formData).length > 0) {
+          setFormData(prev => ({ ...prev, ...parsed.formData }));
+          if (parsed.passportPreview) setPassportPreview(parsed.passportPreview);
+          if (parsed.signaturePreview) setSignaturePreview(parsed.signaturePreview);
+          if (parsed.savedAt) setDraftLastSaved(parsed.savedAt);
+          setShowRestoredNotice(true);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load KYC form draft:', e);
+    }
+  }, []);
+
+  // Auto-save draft on form input or photo changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const draftPayload = {
+          formData,
+          passportPreview,
+          signaturePreview,
+          savedAt: now
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftPayload));
+        setDraftLastSaved(now);
+      } catch (e) {
+        console.error('Failed to save draft:', e);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [formData, passportPreview, signaturePreview]);
+
+  const handleManualSaveDraft = () => {
+    try {
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const draftPayload = {
+        formData,
+        passportPreview,
+        signaturePreview,
+        savedAt: now
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftPayload));
+      setDraftLastSaved(now);
+      alert('✅ Progress saved as draft! Your data is safe on this device if you refresh or close.');
+    } catch (e) {
+      alert('Could not save draft to local storage.');
+    }
+  };
+
+  const handleClearDraft = () => {
+    if (window.confirm('Clear your saved form draft and start with fresh default fields?')) {
+      localStorage.removeItem(DRAFT_KEY);
+      setFormData({
+        title: 'Mr',
+        gender: 'Male',
+        maritalStatus: 'Single',
+        nationality: 'Nigeria',
+        residentStatus: 'Resident',
+        employmentStatus: 'Employed',
+        annualIncome: '₦50,000,000 - ₦250,000,000',
+        sourceOfFunds: 'Business Profits',
+        investmentUnitId: units[0]?.id || 'unit-1',
+        investmentUnitsCount: 1,
+        paymentMethod: 'Bank Transfer',
+        paymentDate: new Date().toISOString().split('T')[0],
+        branch: 'Head Office Victoria Island'
+      });
+      setDraftLastSaved(null);
+      setShowRestoredNotice(false);
+    }
+  };
+
   const primaryBank = companyBankDetails.find(b => b.isPrimary) || companyBankDetails[0];
   const selectedUnit = units.find(u => u.id === formData.investmentUnitId) || units[0];
-  const unitPrice = selectedUnit?.priceNGN || 50000000;
-  const currentUnitsCount = formData.investmentUnitsCount || 1;
-  const totalInvestmentAmount = unitPrice * currentUnitsCount;
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
@@ -154,6 +241,8 @@ export const PublicKYCForm: React.FC = () => {
       createdBy: 'Self (Public Customer Form)'
     });
 
+    // Clear draft on submission
+    localStorage.removeItem(DRAFT_KEY);
     setSubmittedClientNum(clientNum);
   };
 
@@ -257,34 +346,125 @@ export const PublicKYCForm: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-16">
       
-      {/* Banner */}
-      <div className={`p-6 rounded-2xl border relative overflow-hidden shadow-lg ${
-        isDark ? 'bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border-slate-800' : 'bg-slate-300 border-slate-400 text-slate-950'
+      {/* Company Header Branding & Identification Banner */}
+      <div className={`p-5 sm:p-7 rounded-2xl border relative overflow-hidden shadow-xl ${
+        isDark ? 'bg-gradient-to-br from-slate-900 via-emerald-950/40 to-slate-900 border-slate-800 text-slate-100' : 'bg-slate-200 border-slate-400 text-slate-950'
       }`}>
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-          <div className="flex items-center space-x-4">
-            {branding.logoUrl && (
-              <div className="h-14 w-14 rounded-xl bg-slate-300 dark:bg-slate-700 p-1 flex items-center justify-center overflow-hidden border border-slate-400 dark:border-slate-600 shrink-0 shadow-md">
-                <img src={branding.logoUrl} alt="Company Logo" className="w-full h-full object-contain filter drop-shadow-sm" />
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-5 w-full md:w-auto">
+            {branding.logoUrl ? (
+              <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-slate-300 dark:bg-slate-800 p-2 flex items-center justify-center overflow-hidden border-2 border-emerald-500/40 shrink-0 shadow-lg">
+                <img src={branding.logoUrl} alt={branding.companyName} className="w-full h-full object-contain filter drop-shadow-md" />
+              </div>
+            ) : (
+              <div className="h-16 w-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-lg">
+                <Building2 className="w-9 h-9" />
               </div>
             )}
-            <div>
-              <div className="flex items-center space-x-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Public Client Enrollment Portal</span>
+            
+            <div className="space-y-1.5 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-extrabold uppercase tracking-wider border border-emerald-500/30">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{branding.headerTitle || "Public Client Enrollment Portal"}</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-300 dark:bg-slate-800 px-2 py-0.5 rounded">
+                  Regulated Financial Entity
+                </span>
               </div>
-              <h1 className="text-2xl font-extrabold tracking-tight">
+
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white leading-tight">
                 {branding.companyName}
               </h1>
-              <p className={`text-xs mt-1 max-w-xl ${isDark ? 'text-slate-400' : 'text-slate-900'}`}>
-                Complete your enterprise Know Your Customer (KYC) onboarding form below. Upon submission, your record is automatically registered in the compliance system.
-              </p>
+
+              {/* Address Details */}
+              {branding.address && (
+                <div className="flex items-start space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{branding.address}</span>
+                </div>
+              )}
+
+              {/* Contact Row */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400 pt-0.5">
+                {branding.phone && (
+                  <div className="flex items-center space-x-1">
+                    <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <span>{branding.phone}</span>
+                  </div>
+                )}
+                {branding.email && (
+                  <div className="flex items-center space-x-1">
+                    <Mail className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <span>{branding.email}</span>
+                  </div>
+                )}
+                {branding.website && (
+                  <div className="flex items-center space-x-1">
+                    <Globe className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <a href={branding.website} target="_blank" rel="noreferrer" className="hover:underline text-emerald-700 dark:text-emerald-400 font-bold">
+                      {branding.website}
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium shrink-0">
-            <span className="font-bold">Security Notice:</span> Enforced by Enterprise Compliance & DLP
+          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-medium shrink-0 space-y-1 max-w-xs">
+            <span className="font-extrabold block text-emerald-700 dark:text-emerald-400">Enterprise DLP Protected</span>
+            <p className="text-[11px] leading-snug text-slate-700 dark:text-slate-300">
+              {branding.pdfHeader || "Official Financial Customer Subscription & Know Your Customer (KYC) Gateway"}
+            </p>
           </div>
+        </div>
+      </div>
+
+      {/* Local Storage Draft Preservation Action Bar */}
+      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md ${
+        isDark ? 'bg-slate-900/90 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-900'
+      }`}>
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="font-extrabold text-xs text-slate-950 dark:text-white">Mobile Progress Auto-Saved (Draft)</span>
+              {draftLastSaved && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Last Saved: {draftLastSaved}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+              {showRestoredNotice 
+                ? "Restored your saved progress from local storage. Your inputs are preserved if you refresh or close."
+                : "Your answers are automatically saved to your browser so you won't lose work on mobile."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-0 border-slate-300 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={handleManualSaveDraft}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 transition-colors shadow-sm min-h-[40px]"
+            title="Force save form progress now"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save Draft</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearDraft}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center space-x-1.5 transition-colors border border-slate-700 min-h-[40px]"
+            title="Reset form and clear local draft"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Clear Draft</span>
+          </button>
         </div>
       </div>
 
@@ -538,7 +718,7 @@ export const PublicKYCForm: React.FC = () => {
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           placeholder={field.placeholder || `Enter ${field.label}...`}
                           required={field.mandatory}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[48px] ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-600'
@@ -551,7 +731,7 @@ export const PublicKYCForm: React.FC = () => {
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           placeholder={field.placeholder || '0'}
                           required={field.mandatory}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[48px] ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-600'
@@ -563,7 +743,7 @@ export const PublicKYCForm: React.FC = () => {
                           value={val}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           required={field.mandatory}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[48px] ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-600'
@@ -574,7 +754,7 @@ export const PublicKYCForm: React.FC = () => {
                           value={val}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           required={field.mandatory}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[48px] cursor-pointer ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-600'
@@ -586,16 +766,20 @@ export const PublicKYCForm: React.FC = () => {
                           ))}
                         </select>
                       ) : field.type === 'Radio Button' && field.options ? (
-                        <div className="flex items-center space-x-4 py-1">
+                        <div className="flex flex-wrap gap-2 py-1">
                           {field.options.map(opt => (
-                            <label key={opt} className="inline-flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                            <label key={opt} className={`inline-flex items-center space-x-2 px-3.5 py-2.5 rounded-xl border text-xs font-semibold cursor-pointer min-h-[44px] transition-colors ${
+                              val === opt 
+                                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' 
+                                : isDark ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800' : 'bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200'
+                            }`}>
                               <input
                                 type="radio"
                                 name={field.id}
                                 value={opt}
                                 checked={val === opt}
                                 onChange={(e) => handleInputChange(field.id, e.target.value)}
-                                className="text-emerald-500 focus:ring-emerald-500"
+                                className="w-4 h-4 text-emerald-500 focus:ring-emerald-500"
                               />
                               <span>{opt}</span>
                             </label>
@@ -603,12 +787,12 @@ export const PublicKYCForm: React.FC = () => {
                         </div>
                       ) : field.type === 'Address' || field.type === 'Textarea' ? (
                         <textarea
-                          rows={2}
+                          rows={3}
                           value={val}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           placeholder={field.placeholder || 'Enter full address details...'}
                           required={field.mandatory}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[80px] ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-600'
@@ -620,7 +804,7 @@ export const PublicKYCForm: React.FC = () => {
                           value={val}
                           onChange={(e) => handleInputChange(field.id, e.target.value)}
                           placeholder={`Enter ${field.label}...`}
-                          className={`w-full px-3.5 py-2 rounded-lg text-xs border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                          className={`w-full px-4 py-3 rounded-xl text-sm font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/40 min-h-[48px] ${
                             isDark 
                               ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-600 focus:border-emerald-500' 
                               : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-600'
@@ -821,22 +1005,22 @@ export const PublicKYCForm: React.FC = () => {
         )}
 
         {/* Submit Action Footer */}
-        <div className="flex items-center justify-between pt-4">
-          <p className="text-xs text-slate-500 max-w-md">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-300 dark:border-slate-800">
+          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md text-center sm:text-left">
             By submitting this form, you confirm that all information provided is accurate and complies with financial regulations.
           </p>
 
           <button
             type="submit"
             disabled={!confirmedReadFinancials}
-            className={`px-8 py-3.5 rounded-xl text-white font-bold text-sm transition-all shadow-lg flex items-center space-x-2 ${
+            className={`w-full sm:w-auto px-8 py-4 rounded-xl text-white font-extrabold text-base transition-all shadow-xl flex items-center justify-center space-x-3 min-h-[52px] ${
               confirmedReadFinancials
-                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
                 : 'bg-slate-700 opacity-60 cursor-not-allowed'
             }`}
           >
             <span>Submit KYC Application</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-5 h-5" />
           </button>
         </div>
 

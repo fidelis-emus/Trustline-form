@@ -205,12 +205,7 @@ const MainLayout: React.FC = () => {
                   <input
                     name="email"
                     type="email"
-                    defaultValue={
-                      requiredRole === 'Operations' ? 'operations@aegisbank.com' :
-                      requiredRole === 'Compliance' ? 'compliance@aegisbank.com' :
-                      requiredRole === 'Relationship Manager' ? 'relationship@aegisbank.com' :
-                      'superadmin@aegisbank.com'
-                    }
+                    placeholder="Enter your email address"
                     required
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono focus:ring-2 focus:ring-emerald-500/50 focus:outline-none"
                   />
@@ -223,12 +218,7 @@ const MainLayout: React.FC = () => {
                   <input
                     name="password"
                     type="password"
-                    defaultValue={
-                      requiredRole === 'Operations' ? 'Operations#2026!' :
-                      requiredRole === 'Compliance' ? 'Compliance#2026!' :
-                      requiredRole === 'Relationship Manager' ? 'Relationship#2026!' :
-                      'SuperAdmin#2026!'
-                    }
+                    placeholder="Enter your password"
                     required
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono focus:ring-2 focus:ring-emerald-500/50 focus:outline-none"
                   />
@@ -433,7 +423,7 @@ const MainLayout: React.FC = () => {
       <Navbar />
 
       {/* Main Body */}
-      <div className="flex pt-16 min-h-[calc(100vh-4rem)]">
+      <div className="flex min-h-[calc(100vh-4rem)]">
         {/* Sidebar */}
         <Sidebar />
 

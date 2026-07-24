@@ -17,7 +17,8 @@ import {
   UserAccount,
   SharedFolder,
   SharedFolderFile,
-  FolderAccessRequest
+  FolderAccessRequest,
+  EmailSettings
 } from '../types/kyc';
 
 import { 
@@ -38,7 +39,8 @@ import {
   initialSharedFolderFiles,
   initialFolderAccessRequests
 } from '../data/mockData';
-import { EmailSettings } from '../types/kyc';
+
+import { api } from '../services/api';
 
 interface KYCContextType {
   activeRole: RoleType;
@@ -88,7 +90,7 @@ interface KYCContextType {
   updatePermission: (role: RoleType, permission: keyof RolePermissionsMatrix[RoleType], value: boolean) => void;
 
   clients: ClientKYCRecord[];
-  addClientRecord: (recordData: Partial<ClientKYCRecord>) => string; // returns clientNumber
+  addClientRecord: (recordData: Partial<ClientKYCRecord>) => string;
   updateClientRecord: (id: string, recordData: Partial<ClientKYCRecord>) => void;
   transitionWorkflowStatus: (clientId: string, newStatus: KYCStatus, comments: string) => void;
   deleteClientRecord: (id: string) => void;
@@ -107,7 +109,6 @@ interface KYCContextType {
   deleteSharedLink: (id: string) => void;
   validateSharedLinkToken: (token: string, attemptedPassword?: string, attemptedOTP?: string) => { valid: boolean; message: string; link?: SharedLink };
 
-  // Shared Sub-Folders & Restricted Link Management
   sharedFolders: SharedFolder[];
   sharedFolderFiles: SharedFolderFile[];
   folderAccessRequests: FolderAccessRequest[];
@@ -137,8 +138,12 @@ interface KYCContextType {
   isAuthenticated: boolean;
   isLoginModalOpen: boolean;
   setIsLoginModalOpen: (open: boolean) => void;
-  login: (email: string, password?: string, targetRole?: RoleType) => { success: boolean; message: string; mustChangePassword?: boolean; user?: UserAccount };
-  logout: () => void;
+  isMobileSidebarOpen: boolean;
+  setIsMobileSidebarOpen: (open: boolean) => void;
+  sessionExpiredMessage: string | null;
+  clearSessionExpiredMessage: () => void;
+  login: (email: string, password?: string, targetRole?: RoleType) => Promise<{ success: boolean; message: string; mustChangePassword?: boolean; user?: UserAccount }>;
+  logout: (reason?: string) => void;
   createUserAccount: (data: Omit<UserAccount, 'id' | 'createdAt' | 'createdBy' | 'isFirstLogin'>) => UserAccount;
   updateUserAccount: (id: string, data: Partial<UserAccount>) => void;
   deleteUserAccount: (id: string) => void;
@@ -154,15 +159,9 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('superadmin')) return 'Super Admin';
-      if (path.includes('relationship')) return 'Relationship Manager';
+      if (path.includes('relationship') || path.includes('relations')) return 'Relationship Manager';
       if (path.includes('operations')) return 'Operations';
       if (path.includes('compliance')) return 'Compliance';
-      
-      const roleParam = new URLSearchParams(window.location.search).get('role');
-      if (roleParam === 'superadmin' || roleParam === 'Super Admin') return 'Super Admin';
-      if (roleParam === 'relationship' || roleParam === 'Relationship Manager') return 'Relationship Manager';
-      if (roleParam === 'operations' || roleParam === 'Operations') return 'Operations';
-      if (roleParam === 'compliance' || roleParam === 'Compliance') return 'Compliance';
     }
     return 'Super Admin';
   });
@@ -171,7 +170,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveRoleState(role);
     if (typeof window !== 'undefined') {
       let pathSegment = '/superadmin';
-      if (role === 'Relationship Manager') pathSegment = '/relationship';
+      if (role === 'Relationship Manager') pathSegment = '/relations';
       if (role === 'Operations') pathSegment = '/operations';
       if (role === 'Compliance') pathSegment = '/compliance';
 
@@ -179,278 +178,241 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase();
-      if (path.includes('superadmin')) setActiveRoleState('Super Admin');
-      else if (path.includes('relationship')) setActiveRoleState('Relationship Manager');
-      else if (path.includes('operations')) setActiveRoleState('Operations');
-      else if (path.includes('compliance')) setActiveRoleState('Compliance');
-    };
+  const [activeTabState, setActiveTabState] = useState<string>('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    setIsMobileSidebarOpen(false);
+  };
+  const activeTab = activeTabState;
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
 
-  // User Accounts & Authentication State
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
-    const saved = localStorage.getItem('kyc_user_accounts');
-    return saved ? JSON.parse(saved) : initialUserAccounts;
-  });
+  // Backend state
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(initialUserAccounts);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(true);
 
-  useEffect(() => {
-    localStorage.setItem('kyc_user_accounts', JSON.stringify(userAccounts));
-  }, [userAccounts]);
-
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('kyc_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const saved = localStorage.getItem('kyc_is_authenticated');
-    return saved !== null ? JSON.parse(saved) : false;
-  });
-
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
-    const saved = localStorage.getItem('kyc_is_authenticated');
-    return saved !== null ? !JSON.parse(saved) : true;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('kyc_current_user', JSON.stringify(currentUser));
-    localStorage.setItem('kyc_is_authenticated', JSON.stringify(isAuthenticated));
-  }, [currentUser, isAuthenticated]);
-
-  // CMS state loaded from localStorage or fallback to initial
-  const [branding, setBranding] = useState<BrandingConfig>(() => {
-    const saved = localStorage.getItem('kyc_branding');
-    return saved ? JSON.parse(saved) : initialBranding;
-  });
-
-  const [emailSettings, setEmailSettings] = useState<EmailSettings>(() => {
-    const saved = localStorage.getItem('kyc_email_settings');
-    return saved ? JSON.parse(saved) : initialEmailSettings;
-  });
-
-  const [sections, setSections] = useState<FormSection[]>(() => {
-    const saved = localStorage.getItem('kyc_sections');
-    return saved ? JSON.parse(saved) : initialSections;
-  });
-
-  const [fields, setFields] = useState<FormField[]>(() => {
-    const saved = localStorage.getItem('kyc_fields');
-    return saved ? JSON.parse(saved) : initialFields;
-  });
-
-  const [units, setUnits] = useState<InvestmentUnit[]>(() => {
-    const saved = localStorage.getItem('kyc_units');
-    return saved ? JSON.parse(saved) : initialUnits;
-  });
-
-  const [companyBankDetails, setCompanyBankDetails] = useState<CompanyBankDetail[]>(() => {
-    const saved = localStorage.getItem('kyc_bank_details');
-    return saved ? JSON.parse(saved) : initialCompanyBankDetails;
-  });
-
-  const [officers, setOfficers] = useState<AccountOfficer[]>(() => {
-    const saved = localStorage.getItem('kyc_officers');
-    return saved ? JSON.parse(saved) : initialOfficers;
-  });
-
-  const [purviewLabels, setPurviewLabels] = useState<SensitivityLabelConfig[]>(() => {
-    const saved = localStorage.getItem('kyc_purview_labels');
-    return saved ? JSON.parse(saved) : initialPurviewLabels;
-  });
-
-  const [permissions, setPermissions] = useState<RolePermissionsMatrix>(() => {
-    const saved = localStorage.getItem('kyc_permissions');
-    return saved ? JSON.parse(saved) : initialPermissions;
-  });
-
-  const [clients, setClients] = useState<ClientKYCRecord[]>(() => {
-    const saved = localStorage.getItem('kyc_clients');
-    if (!saved) return initialClients;
-    const parsed: ClientKYCRecord[] = JSON.parse(saved);
-    // Filter out dummy test clients if present
-    return parsed.filter(c => !['cli-1', 'cli-2', 'cli-3'].includes(c.id));
-  });
-
-  const [documents, setDocuments] = useState<KYCDocument[]>(() => {
-    const saved = localStorage.getItem('kyc_documents');
-    if (!saved) return initialDocuments;
-    const parsed: KYCDocument[] = JSON.parse(saved);
-    return parsed.filter(d => !['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5'].includes(d.id));
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
-    const saved = localStorage.getItem('kyc_audit_logs');
-    if (!saved) return initialAuditLogs;
-    const parsed: AuditLogEntry[] = JSON.parse(saved);
-    return parsed.filter(l => !['log-1', 'log-2', 'log-3', 'log-4', 'log-5'].includes(l.id));
-  });
-
-  const initialSharedLinks: SharedLink[] = [
-    {
-      id: 'link-1',
-      token: 'FORM-LINK-PUBLIC-2026',
-      title: 'Customer Direct Onboarding Form',
-      linkType: 'Public KYC Form',
-      createdBy: 'Super Admin',
-      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      expiresAt: '2026-12-31 23:59:59',
-      recipientName: 'General Corporate Clients',
-      allowedEmail: '',
-      requirePassword: false,
-      requireOTP: false,
-      maxDownloads: 1000,
-      currentDownloads: 0,
-      isActive: true,
-      isApproved: true,
-      approvedBy: 'Super Admin',
-      approvedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      canFillForm: true,
-      canViewRecords: false,
-      canDownloadDocs: false
-    }
-  ];
-
-  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>(() => {
-    const saved = localStorage.getItem('kyc_shared_links');
-    return saved ? JSON.parse(saved) : initialSharedLinks;
-  });
-
-  const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>(() => {
-    const saved = localStorage.getItem('kyc_shared_folders');
-    return saved ? JSON.parse(saved) : initialSharedFolders;
-  });
-
-  const [sharedFolderFiles, setSharedFolderFiles] = useState<SharedFolderFile[]>(() => {
-    const saved = localStorage.getItem('kyc_shared_folder_files');
-    return saved ? JSON.parse(saved) : initialSharedFolderFiles;
-  });
-
-  const [folderAccessRequests, setFolderAccessRequests] = useState<FolderAccessRequest[]>(() => {
-    const saved = localStorage.getItem('kyc_folder_access_requests');
-    return saved ? JSON.parse(saved) : initialFolderAccessRequests;
-  });
+  const [branding, setBrandingState] = useState<BrandingConfig>(initialBranding);
+  const [emailSettings, setEmailSettingsState] = useState<EmailSettings>(initialEmailSettings);
+  const [sections, setSections] = useState<FormSection[]>(initialSections);
+  const [fields, setFields] = useState<FormField[]>(initialFields);
+  const [units, setUnits] = useState<InvestmentUnit[]>(initialUnits);
+  const [companyBankDetails, setCompanyBankDetails] = useState<CompanyBankDetail[]>(initialCompanyBankDetails);
+  const [officers, setOfficers] = useState<AccountOfficer[]>(initialOfficers);
+  const [purviewLabels, setPurviewLabels] = useState<SensitivityLabelConfig[]>(initialPurviewLabels);
+  const [permissions, setPermissions] = useState<RolePermissionsMatrix>(initialPermissions);
+  const [clients, setClients] = useState<ClientKYCRecord[]>(initialClients);
+  const [documents, setDocuments] = useState<KYCDocument[]>(initialDocuments);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(initialAuditLogs);
+  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
+  const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>(initialSharedFolders);
+  const [sharedFolderFiles, setSharedFolderFiles] = useState<SharedFolderFile[]>(initialSharedFolderFiles);
+  const [folderAccessRequests, setFolderAccessRequests] = useState<FolderAccessRequest[]>(initialFolderAccessRequests);
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedClientForPrint, setSelectedClientForPrint] = useState<ClientKYCRecord | null>(null);
 
-  // Sync state to local storage
-  useEffect(() => { localStorage.setItem('kyc_branding', JSON.stringify(branding)); }, [branding]);
-  useEffect(() => { localStorage.setItem('kyc_email_settings', JSON.stringify(emailSettings)); }, [emailSettings]);
-  useEffect(() => { localStorage.setItem('kyc_sections', JSON.stringify(sections)); }, [sections]);
-  useEffect(() => { localStorage.setItem('kyc_fields', JSON.stringify(fields)); }, [fields]);
-  useEffect(() => { localStorage.setItem('kyc_units', JSON.stringify(units)); }, [units]);
-  useEffect(() => { localStorage.setItem('kyc_bank_details', JSON.stringify(companyBankDetails)); }, [companyBankDetails]);
-  useEffect(() => { localStorage.setItem('kyc_officers', JSON.stringify(officers)); }, [officers]);
-  useEffect(() => { localStorage.setItem('kyc_purview_labels', JSON.stringify(purviewLabels)); }, [purviewLabels]);
-  useEffect(() => { localStorage.setItem('kyc_permissions', JSON.stringify(permissions)); }, [permissions]);
-  useEffect(() => { localStorage.setItem('kyc_clients', JSON.stringify(clients)); }, [clients]);
-  useEffect(() => { localStorage.setItem('kyc_documents', JSON.stringify(documents)); }, [documents]);
-  useEffect(() => { localStorage.setItem('kyc_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
-  useEffect(() => { localStorage.setItem('kyc_shared_links', JSON.stringify(sharedLinks)); }, [sharedLinks]);
-  useEffect(() => { localStorage.setItem('kyc_shared_folders', JSON.stringify(sharedFolders)); }, [sharedFolders]);
-  useEffect(() => { localStorage.setItem('kyc_shared_folder_files', JSON.stringify(sharedFolderFiles)); }, [sharedFolderFiles]);
-  useEffect(() => { localStorage.setItem('kyc_folder_access_requests', JSON.stringify(folderAccessRequests)); }, [folderAccessRequests]);
-
-  // Real-time Storage Listener: auto-refresh state when CMS changes occur in any tab or window
+  // Fetch initial data from REST API backend on mount
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
+    const fetchData = async () => {
       try {
-        if (e.key === 'kyc_branding' && e.newValue) setBranding(JSON.parse(e.newValue));
-        if (e.key === 'kyc_sections' && e.newValue) setSections(JSON.parse(e.newValue));
-        if (e.key === 'kyc_fields' && e.newValue) setFields(JSON.parse(e.newValue));
-        if (e.key === 'kyc_units' && e.newValue) setUnits(JSON.parse(e.newValue));
-        if (e.key === 'kyc_bank_details' && e.newValue) setCompanyBankDetails(JSON.parse(e.newValue));
-        if (e.key === 'kyc_shared_links' && e.newValue) setSharedLinks(JSON.parse(e.newValue));
-        if (e.key === 'kyc_clients' && e.newValue) setClients(JSON.parse(e.newValue));
-        if (e.key === 'kyc_shared_folders' && e.newValue) setSharedFolders(JSON.parse(e.newValue));
-        if (e.key === 'kyc_shared_folder_files' && e.newValue) setSharedFolderFiles(JSON.parse(e.newValue));
-        if (e.key === 'kyc_folder_access_requests' && e.newValue) setFolderAccessRequests(JSON.parse(e.newValue));
-      } catch (err) {
-        console.error('Error syncing storage event:', err);
+        const [
+          brandingData,
+          emailData,
+          schemaData,
+          unitsData,
+          bankData,
+          officerData,
+          clientData,
+          docData,
+          logData,
+          linkData,
+          folderData,
+          permData
+        ] = await Promise.all([
+          api.branding.get().catch(() => initialBranding),
+          api.emailSettings.get().catch(() => initialEmailSettings),
+          api.formBuilder.getSchema().catch(() => ({ sections: initialSections, fields: initialFields })),
+          api.banking.getUnits().catch(() => initialUnits),
+          api.banking.getAccounts().catch(() => initialCompanyBankDetails),
+          api.banking.getOfficers().catch(() => initialOfficers),
+          api.clients.getAll().catch(() => initialClients),
+          api.documents.getAll().catch(() => initialDocuments),
+          api.auditLogs.getAll().catch(() => initialAuditLogs),
+          api.sharedLinks.getAll().catch(() => []),
+          api.sharedFolders.getAll().catch(() => initialSharedFolders),
+          api.rolePermissions.getMatrix().catch(() => initialPermissions)
+        ]);
+
+        if (brandingData) setBrandingState(brandingData);
+        if (emailData) setEmailSettingsState(emailData);
+        if (schemaData) {
+          if (schemaData.sections?.length) setSections(schemaData.sections);
+          if (schemaData.fields?.length) setFields(schemaData.fields);
+        }
+        if (unitsData?.length) setUnits(unitsData);
+        if (bankData?.length) setCompanyBankDetails(bankData);
+        if (officerData?.length) setOfficers(officerData);
+        if (clientData?.length) setClients(clientData);
+        if (docData?.length) setDocuments(docData);
+        if (logData?.length) setAuditLogs(logData);
+        if (linkData) setSharedLinks(linkData);
+        if (folderData?.length) setSharedFolders(folderData);
+        if (permData) setPermissions(permData);
+      } catch (e) {
+        console.warn("Backend REST API offline or initializing - using live state", e);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    fetchData();
   }, []);
 
   const toggleTheme = () => setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
 
-  const updateBranding = (data: Partial<BrandingConfig>) => {
-    setBranding(prev => ({ ...prev, ...data }));
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Field Configuration Updated',
-      target: 'Company Branding & CMS Settings',
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11 Enterprise',
-      device: 'Workstation',
-      details: 'Updated CMS branding title, theme colors, or watermark headers.',
-      status: 'Success'
-    });
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+  const clearSessionExpiredMessage = () => setSessionExpiredMessage(null);
+  const lastActivityRef = React.useRef<number>(Date.now());
+  const sessionStartRef = React.useRef<number>(Date.now());
+
+  // Auto Login Check on Startup via /api/auth/me
+  useEffect(() => {
+    const checkAutoLogin = async () => {
+      try {
+        const token = localStorage.getItem('kyc_jwt_token');
+        if (token) {
+          const res = await api.auth.me();
+          if (res?.user) {
+            setCurrentUser(res.user);
+            setIsAuthenticated(true);
+            setActiveRole(res.user.role);
+            setIsLoginModalOpen(false);
+            sessionStartRef.current = Date.now();
+            lastActivityRef.current = Date.now();
+          }
+        }
+      } catch (e) {
+        localStorage.removeItem('kyc_jwt_token');
+        setIsAuthenticated(false);
+        setIsLoginModalOpen(true);
+      }
+    };
+    checkAutoLogin();
+  }, []);
+
+  // Idle Timeout (10 minutes) & Max Session Duration (8 hours) Monitoring
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const events = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, updateActivity, { passive: true }));
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      if (now - lastActivityRef.current > 10 * 60 * 1000) {
+        logout('Your session has expired due to 10 minutes of inactivity. Please login again.');
+      } else if (now - sessionStartRef.current > 8 * 60 * 60 * 1000) {
+        logout('Your maximum 8-hour session lifetime has ended. Please login again.');
+      }
+    }, 5000);
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, updateActivity));
+      clearInterval(timer);
+    };
+  }, [isAuthenticated]);
+
+  // Cross-Tab Auth Synchronization
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const channel = new BroadcastChannel('kyc_auth_channel');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'LOGOUT') {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setIsLoginModalOpen(true);
+        } else if (event.data?.type === 'LOGIN' && event.data.user) {
+          setCurrentUser(event.data.user);
+          setIsAuthenticated(true);
+          setActiveRole(event.data.user.role);
+          setIsLoginModalOpen(false);
+        }
+      };
+      return () => channel.close();
+    } catch (e) {
+      const handleStorage = (e: StorageEvent) => {
+        if (e.key === 'kyc_jwt_token' && !e.newValue) {
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setIsLoginModalOpen(true);
+        }
+      };
+      window.addEventListener('storage', handleStorage);
+      return () => window.removeEventListener('storage', handleStorage);
+    }
+  }, []);
+
+  const updateBranding = async (data: Partial<BrandingConfig>) => {
+    const updated = { ...branding, ...data };
+    setBrandingState(updated);
+    try { await api.branding.update(updated); } catch (e) { console.error(e); }
   };
 
-  const updateEmailSettings = (data: Partial<EmailSettings>) => {
-    setEmailSettings(prev => ({ ...prev, ...data }));
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Field Configuration Updated',
-      target: 'Email SMTP & Notification Settings',
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11 Enterprise',
-      device: 'Workstation',
-      details: 'Updated SMTP server settings, sender email, or Relationship Manager copy email.',
-      status: 'Success'
-    });
+  const updateEmailSettings = async (data: Partial<EmailSettings>) => {
+    const updated = { ...emailSettings, ...data };
+    setEmailSettingsState(updated);
+    try { await api.emailSettings.update(updated); } catch (e) { console.error(e); }
   };
 
-  const addAuditLog = (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
+  const addAuditLog = async (entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) => {
     const newLog: AuditLogEntry = {
       ...entry,
-      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: `log-${Date.now()}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
     };
     setAuditLogs(prev => [newLog, ...prev]);
+    try { await api.auditLogs.add(entry); } catch (e) { console.error(e); }
   };
 
   // Section actions
-  const addSection = (sec: Omit<FormSection, 'id'>) => {
+  const addSection = async (sec: Omit<FormSection, 'id'>) => {
     const newSec: FormSection = { ...sec, id: `sec-${Date.now()}` };
     setSections(prev => [...prev, newSec]);
+    try { await api.formBuilder.createSection(sec); } catch (e) { console.error(e); }
   };
 
-  const updateSection = (id: string, secData: Partial<FormSection>) => {
+  const updateSection = async (id: string, secData: Partial<FormSection>) => {
     setSections(prev => prev.map(s => s.id === id ? { ...s, ...secData } : s));
+    try { await api.formBuilder.updateSection(id, secData); } catch (e) { console.error(e); }
   };
 
-  const deleteSection = (id: string) => {
+  const deleteSection = async (id: string) => {
     setSections(prev => prev.filter(s => s.id !== id));
     setFields(prev => prev.filter(f => f.sectionId !== id));
+    try { await api.formBuilder.deleteSection(id); } catch (e) { console.error(e); }
   };
 
   // Field actions
-  const addField = (fieldData: Omit<FormField, 'id'>) => {
+  const addField = async (fieldData: Omit<FormField, 'id'>) => {
     const newField: FormField = { ...fieldData, id: `f-${Date.now()}` };
     setFields(prev => [...prev, newField]);
+    try { await api.formBuilder.createField(fieldData); } catch (e) { console.error(e); }
   };
 
-  const updateField = (id: string, fieldData: Partial<FormField>) => {
+  const updateField = async (id: string, fieldData: Partial<FormField>) => {
     setFields(prev => prev.map(f => f.id === id ? { ...f, ...fieldData } : f));
+    try { await api.formBuilder.updateField(id, fieldData); } catch (e) { console.error(e); }
   };
 
-  const deleteField = (id: string) => {
+  const deleteField = async (id: string) => {
     setFields(prev => prev.filter(f => f.id !== id));
+    try { await api.formBuilder.deleteField(id); } catch (e) { console.error(e); }
   };
 
   const duplicateField = (id: string) => {
@@ -463,52 +425,59 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       order: target.order + 1
     };
     setFields(prev => [...prev, duplicated]);
+    api.formBuilder.createField(duplicated).catch(console.error);
   };
 
-  const reorderFields = (newFields: FormField[]) => {
-    setFields(newFields);
-  };
+  const reorderFields = (newFields: FormField[]) => setFields(newFields);
 
   // Investment Units
-  const addUnit = (u: Omit<InvestmentUnit, 'id'>) => {
+  const addUnit = async (u: Omit<InvestmentUnit, 'id'>) => {
     const newUnit: InvestmentUnit = { ...u, id: `unit-${Date.now()}` };
     setUnits(prev => [...prev, newUnit]);
+    try { await api.banking.createUnit(u); } catch (e) { console.error(e); }
   };
 
-  const updateUnit = (id: string, uData: Partial<InvestmentUnit>) => {
+  const updateUnit = async (id: string, uData: Partial<InvestmentUnit>) => {
     setUnits(prev => prev.map(u => u.id === id ? { ...u, ...uData } : u));
+    try { await api.banking.updateUnit(id, uData); } catch (e) { console.error(e); }
   };
 
-  const deleteUnit = (id: string) => {
+  const deleteUnit = async (id: string) => {
     setUnits(prev => prev.filter(u => u.id !== id));
+    try { await api.banking.deleteUnit(id); } catch (e) { console.error(e); }
   };
 
   // Bank Details
-  const addBankDetail = (b: Omit<CompanyBankDetail, 'id'>) => {
+  const addBankDetail = async (b: Omit<CompanyBankDetail, 'id'>) => {
     const newBank: CompanyBankDetail = { ...b, id: `bank-${Date.now()}` };
     setCompanyBankDetails(prev => [...prev, newBank]);
+    try { await api.banking.createAccount(b); } catch (e) { console.error(e); }
   };
 
-  const updateBankDetail = (id: string, bData: Partial<CompanyBankDetail>) => {
+  const updateBankDetail = async (id: string, bData: Partial<CompanyBankDetail>) => {
     setCompanyBankDetails(prev => prev.map(b => b.id === id ? { ...b, ...bData } : b));
+    try { await api.banking.updateAccount(id, bData); } catch (e) { console.error(e); }
   };
 
-  const deleteBankDetail = (id: string) => {
+  const deleteBankDetail = async (id: string) => {
     setCompanyBankDetails(prev => prev.filter(b => b.id !== id));
+    try { await api.banking.deleteAccount(id); } catch (e) { console.error(e); }
   };
 
   // Officers
-  const addOfficer = (o: Omit<AccountOfficer, 'id'>) => {
+  const addOfficer = async (o: Omit<AccountOfficer, 'id'>) => {
     const newOff: AccountOfficer = { ...o, id: `off-${Date.now()}` };
     setOfficers(prev => [...prev, newOff]);
+    try { await api.banking.createOfficer(o); } catch (e) { console.error(e); }
   };
 
   const updateOfficer = (id: string, oData: Partial<AccountOfficer>) => {
     setOfficers(prev => prev.map(o => o.id === id ? { ...o, ...oData } : o));
   };
 
-  const deleteOfficer = (id: string) => {
+  const deleteOfficer = async (id: string) => {
     setOfficers(prev => prev.filter(o => o.id !== id));
+    try { await api.banking.deleteOfficer(id); } catch (e) { console.error(e); }
   };
 
   // Purview Labels
@@ -517,14 +486,16 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Permissions
-  const updatePermission = (role: RoleType, permission: keyof RolePermissionsMatrix[RoleType], value: boolean) => {
-    setPermissions(prev => ({
-      ...prev,
+  const updatePermission = async (role: RoleType, permission: keyof RolePermissionsMatrix[RoleType], value: boolean) => {
+    const updated = {
+      ...permissions,
       [role]: {
-        ...prev[role],
+        ...permissions[role],
         [permission]: value
       }
-    }));
+    };
+    setPermissions(updated);
+    try { await api.rolePermissions.updateMatrix(updated); } catch (e) { console.error(e); }
   };
 
   // Client Records & Workflow
@@ -567,7 +538,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       investmentUnitsCount: recordData.investmentUnitsCount || 1,
       investmentTotalAmount: recordData.investmentTotalAmount || 50000000,
       paymentMethod: recordData.paymentMethod || 'Bank Transfer',
-      transactionRef: recordData.transactionRef || `AEG-TRX-2026-${clientSeq}`,
+      transactionRef: recordData.transactionRef || `TRX-2026-${clientSeq}`,
       paymentDate: recordData.paymentDate || new Date().toISOString().split('T')[0],
       nextOfKinName: recordData.nextOfKinName || '',
       nextOfKinRelationship: recordData.nextOfKinRelationship || 'Spouse',
@@ -576,8 +547,8 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nextOfKinEmail: recordData.nextOfKinEmail || '',
       beneficiaryAccountName: recordData.beneficiaryAccountName || '',
       beneficiaryAccountNumber: recordData.beneficiaryAccountNumber || '',
-      beneficiaryBankName: recordData.beneficiaryBankName || 'Aegis Central Settlement Bank',
-      beneficiarySwift: recordData.beneficiarySwift || 'AEGISNGLA',
+      beneficiaryBankName: recordData.beneficiaryBankName || 'TrustLine Central Bank',
+      beneficiarySwift: recordData.beneficiarySwift || 'TRUSTNGLA',
       referredBy: recordData.referredBy || 'Public Form',
       accountOfficerId: recordData.accountOfficerId || 'off-1',
       relationshipManagerId: recordData.relationshipManagerId || 'off-1',
@@ -597,58 +568,15 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           changedBy: `${recordData.firstName} ${recordData.lastName}`.trim() || 'Applicant',
           userRole: 'Operations',
           timestamp,
-          comments: 'Public KYC Application submitted successfully into SharePoint List.'
+          comments: 'Public KYC Application submitted successfully into Database Vault.'
         }
       ]
     };
 
     setClients(prev => [newRecord, ...prev]);
 
-    // Create default documents in SharePoint Vault
-    const docId1 = `doc-${Date.now()}-1`;
-    const doc1: KYCDocument = {
-      id: docId1,
-      clientId: id,
-      docType: 'Passport Photograph',
-      fileName: `${recordData.firstName}_${recordData.lastName}_Passport.png`,
-      fileSize: '1.2 MB',
-      uploadDate: timestamp,
-      uploadedBy: `${recordData.firstName} ${recordData.lastName}`,
-      fileUrl: newRecord.passportPhotoUrl!,
-      sensitivityLabel: 'Highly Confidential',
-      version: 'v1.0',
-      sharepointPath: `SharePoint://Sites/AegisKYC/Documents/${clientNumber}/Passport.png`
-    };
-
-    const docId2 = `doc-${Date.now()}-2`;
-    const doc2: KYCDocument = {
-      id: docId2,
-      clientId: id,
-      docType: 'Signature',
-      fileName: `${recordData.firstName}_${recordData.lastName}_Signature.png`,
-      fileSize: '280 KB',
-      uploadDate: timestamp,
-      uploadedBy: `${recordData.firstName} ${recordData.lastName}`,
-      fileUrl: newRecord.signatureUrl!,
-      sensitivityLabel: 'Restricted',
-      version: 'v1.0',
-      sharepointPath: `SharePoint://Sites/AegisKYC/Documents/${clientNumber}/Signature.png`
-    };
-
-    setDocuments(prev => [doc1, doc2, ...prev]);
-
-    addAuditLog({
-      user: `${recordData.firstName} ${recordData.lastName}` || 'Applicant',
-      role: 'Operations',
-      action: 'Document Upload',
-      target: `${clientNumber} (${recordData.firstName} ${recordData.lastName})`,
-      ipAddress: '197.210.15.88',
-      browser: 'Chrome / Mobile',
-      os: 'Android / iOS',
-      device: 'User Mobile Browser',
-      details: 'New Public KYC Application created and synchronized to SharePoint List.',
-      status: 'Success'
-    });
+    // Send to REST API
+    api.clients.create(newRecord).catch(err => console.error("Error persisting client record to REST API:", err));
 
     return clientNumber;
   };
@@ -657,7 +585,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClients(prev => prev.map(c => c.id === id ? { ...c, ...recordData, lastUpdatedDate: new Date().toISOString().replace('T', ' ').substring(0, 19) } : c));
   };
 
-  const transitionWorkflowStatus = (clientId: string, newStatus: KYCStatus, comments: string) => {
+  const transitionWorkflowStatus = async (clientId: string, newStatus: KYCStatus, comments: string) => {
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
@@ -675,80 +603,32 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...c,
           status: newStatus,
           lastUpdatedDate: timestamp,
-          workflowHistory: [...c.workflowHistory, historyItem]
+          workflowHistory: [...(c.workflowHistory || []), historyItem]
         };
       }
       return c;
     }));
 
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Approval Stage Transition',
-      target: `Client ID ${clientId} -> ${newStatus}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Edge 126.0',
-      os: 'Windows 11',
-      device: 'Enterprise Workstation',
-      details: `Status shifted to ${newStatus}. Note: "${comments}"`,
-      status: 'Success'
-    });
+    try {
+      await api.clients.updateStatus(clientId, newStatus, activeRole, activeRole, comments);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const deleteClientRecord = (id: string) => {
-    const client = clients.find(c => c.id === id);
     setClients(prev => prev.filter(c => c.id !== id));
-    setDocuments(prev => prev.filter(d => d.clientId !== id));
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Document Delete',
-      target: client ? `${client.clientNumber} (${client.firstName} ${client.lastName})` : id,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: 'Client record and associated SharePoint attachments permanently removed.',
-      status: 'Success'
-    });
   };
 
   // Document Library
-  const addDocument = (docData: Omit<KYCDocument, 'id'>) => {
+  const addDocument = async (docData: Omit<KYCDocument, 'id'>) => {
     const newDoc: KYCDocument = { ...docData, id: `doc-${Date.now()}` };
     setDocuments(prev => [newDoc, ...prev]);
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Document Upload',
-      target: docData.fileName,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Uploaded file to SharePoint path: ${docData.sharepointPath}`,
-      status: 'Success'
-    });
   };
 
-  const deleteDocument = (id: string) => {
-    const doc = documents.find(d => d.id === id);
+  const deleteDocument = async (id: string) => {
     setDocuments(prev => prev.filter(d => d.id !== id));
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Document Delete',
-      target: doc ? doc.fileName : id,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: 'Deleted file from SharePoint Document Vault.',
-      status: 'Success'
-    });
+    try { await api.documents.delete(id); } catch (e) { console.error(e); }
   };
 
   const replaceDocument = (id: string, newFileName: string, newFileUrl: string) => {
@@ -772,8 +652,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createSharedLink = (linkData: Omit<SharedLink, 'id' | 'createdAt' | 'token' | 'currentDownloads'>): SharedLink => {
     const token = `SHR-TOKEN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    
-    // Customer/Client Form links are ALWAYS unrestricted and approved by default.
+
     const isCustomerLink = linkData.targetRole === 'Customer' || linkData.linkType === 'Public KYC Form';
     const isApprovedByRole = isCustomerLink ? true : (activeRole === 'Super Admin' ? (linkData.isApproved !== undefined ? linkData.isApproved : true) : (linkData.isApproved || false));
 
@@ -789,70 +668,21 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       approvedAt: isApprovedByRole ? timestamp : undefined
     };
     setSharedLinks(prev => [newLink, ...prev]);
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Share Link Generated',
-      target: `Link: ${newLink.title} (Token: ${token})`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Created link "${newLink.title}". Approval Status: ${isApprovedByRole ? 'Approved' : 'Pending Approval'}. Expiry: ${linkData.expiresAt}`,
-      status: 'Success'
-    });
+    api.sharedLinks.create(newLink).catch(console.error);
 
     return newLink;
   };
 
   const toggleLinkApproval = (id: string, approved: boolean) => {
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    setSharedLinks(prev => prev.map(l => {
-      if (l.id === id) {
-        return {
-          ...l,
-          isApproved: approved,
-          approvedBy: approved ? activeRole : undefined,
-          approvedAt: approved ? timestamp : undefined
-        };
-      }
-      return l;
-    }));
-
-    const targetLink = sharedLinks.find(l => l.id === id);
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Permission Changed',
-      target: `Link Token: ${targetLink?.token || id}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Admin ${approved ? 'GRANTED APPROVAL' : 'REVOKED APPROVAL'} for shared link token: ${targetLink?.token}`,
-      status: 'Success'
-    });
+    setSharedLinks(prev => prev.map(l => l.id === id ? { ...l, isApproved: approved, approvedBy: approved ? activeRole : undefined, approvedAt: approved ? timestamp : undefined } : l));
   };
 
-  const deleteSharedLink = (id: string) => {
-    const targetLink = sharedLinks.find(l => l.id === id);
+  const deleteSharedLink = async (id: string) => {
     setSharedLinks(prev => prev.filter(l => l.id !== id));
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Document Delete',
-      target: `Link Token: ${targetLink?.token || id}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Deleted shared link token: ${targetLink?.token}`,
-      status: 'Success'
-    });
+    try { await api.sharedLinks.delete(id); } catch (e) { console.error(e); }
   };
 
-  // Shared Sub-Folders Methods
   const createSharedSubFolder = (folderData: Partial<SharedFolder>): SharedFolder => {
     const shareToken = `SF-LINK-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
@@ -867,41 +697,13 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowedEmails: folderData.allowedEmails || [],
       requireApproval: folderData.requireApproval !== undefined ? folderData.requireApproval : true,
       shareToken,
-      isApproved: folderData.isApproved !== undefined ? folderData.isApproved : false, // Restricted by default, requires approval
+      isApproved: folderData.isApproved !== undefined ? folderData.isApproved : false,
       allowUploads: folderData.allowUploads !== undefined ? folderData.allowUploads : true,
       accessCount: 0
     };
 
     setSharedFolders(prev => [newFolder, ...prev]);
-
-    // Create corresponding shared link entry for unified tracking
-    createSharedLink({
-      title: `Sub-Folder Link: ${newFolder.name}`,
-      linkType: 'Shared Sub-Folder Link',
-      targetRole: (newFolder.restrictedRoles[0] as any) || 'External User',
-      folderId: newFolder.id,
-      createdBy: activeRole,
-      expiresAt: '2026-12-31 23:59:59',
-      recipientName: `Restricted: ${newFolder.restrictedRoles.join(', ')}`,
-      maxDownloads: 500,
-      isActive: true,
-      isApproved: newFolder.isApproved,
-      canDownloadDocs: true
-    });
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Share Link Generated',
-      target: `Sub-Folder: ${newFolder.name}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Created sub-folder "${newFolder.name}" restricted to roles (${newFolder.restrictedRoles.join(', ')}). Approval required: ${newFolder.requireApproval ? 'YES' : 'NO'}.`,
-      status: 'Success'
-    });
-
+    api.sharedFolders.create(newFolder).catch(console.error);
     return newFolder;
   };
 
@@ -909,9 +711,10 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSharedFolders(prev => prev.map(f => f.id === folderId ? { ...f, ...folderData } : f));
   };
 
-  const deleteSharedSubFolder = (folderId: string) => {
+  const deleteSharedSubFolder = async (folderId: string) => {
     setSharedFolders(prev => prev.filter(f => f.id !== folderId));
     setSharedFolderFiles(prev => prev.filter(file => file.folderId !== folderId));
+    try { await api.sharedFolders.delete(folderId); } catch (e) { console.error(e); }
   };
 
   const uploadSharedFolderFile = (folderId: string, fileData: { fileName: string; fileSize: string; fileType: string; fileUrl: string; sensitivityLabel?: any; description?: string }): SharedFolderFile => {
@@ -930,20 +733,6 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSharedFolderFiles(prev => [newFile, ...prev]);
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Document Upload',
-      target: `Sub-Folder File: ${newFile.fileName}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Uploaded file "${newFile.fileName}" (${newFile.fileSize}) into shared sub-folder ID: ${folderId}`,
-      status: 'Success'
-    });
-
     return newFile;
   };
 
@@ -966,7 +755,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowedEmail: options?.allowedEmail,
       maxDownloads: 500,
       isActive: true,
-      isApproved: options?.requireApproval === false ? true : false, // Restricted link requires approval
+      isApproved: options?.requireApproval === false ? true : false,
       canDownloadDocs: true
     });
   };
@@ -989,20 +778,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setFolderAccessRequests(prev => [newReq, ...prev]);
-
-    addAuditLog({
-      user: requester.name,
-      role: 'Operations',
-      action: 'Access Denied Attempt',
-      target: `Folder Access Request: ${newReq.folderName}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Approval request submitted by ${requester.name} (${requester.email}) for restricted sub-folder "${newReq.folderName}". Awaiting SuperAdmin approval.`,
-      status: 'Warning'
-    });
-
+    api.sharedFolders.createAccessRequest(newReq).catch(console.error);
     return newReq;
   };
 
@@ -1020,6 +796,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return r;
     }));
+    api.sharedFolders.updateAccessRequestStatus(requestId, 'Approved', activeRole).catch(console.error);
   };
 
   const rejectFolderAccessRequest = (requestId: string) => {
@@ -1035,6 +812,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return r;
     }));
+    api.sharedFolders.updateAccessRequestStatus(requestId, 'Rejected', activeRole).catch(console.error);
   };
 
   const toggleFolderApproval = (folderId: string, approved: boolean) => {
@@ -1056,52 +834,15 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const validateSharedLinkToken = (token: string, attemptedPassword?: string, attemptedOTP?: string) => {
     const link = sharedLinks.find(l => l.token === token || token.includes(l.token));
     if (!link) {
-      addAuditLog({
-        user: 'Guest / Link User',
-        role: 'Operations',
-        action: 'Access Denied Attempt',
-        target: `Invalid Token (${token})`,
-        ipAddress: '102.89.201.44',
-        browser: 'Safari Mobile',
-        os: 'iOS 17',
-        device: 'External Mobile Device',
-        details: 'Attempted to access non-existent or corrupted share link token.',
-        status: 'Denied'
-      });
       return { valid: false, message: 'Invalid or corrupt link token.' };
     }
 
     if (!link.isActive) {
-      addAuditLog({
-        user: 'Guest / Link User',
-        role: 'Operations',
-        action: 'Access Denied Attempt',
-        target: `Token: ${link.token}`,
-        ipAddress: '102.89.201.44',
-        browser: 'Chrome 126.0',
-        os: 'Android',
-        device: 'Mobile',
-        details: 'Attempted to open deactivated or revoked share link.',
-        status: 'Denied'
-      });
       return { valid: false, message: 'This link has been deactivated or revoked by the administrator.', link };
     }
 
-    // CHECK APPROVAL RESTRICTION (Customer/Client form links are ALWAYS unrestricted and free to access)
     const isCustomerLink = link.targetRole === 'Customer' || link.linkType === 'Public KYC Form';
     if (!link.isApproved && !isCustomerLink) {
-      addAuditLog({
-        user: 'Guest / Link User',
-        role: 'Operations',
-        action: 'Access Denied Attempt',
-        target: `Token: ${link.token} (${link.title})`,
-        ipAddress: '102.89.201.44',
-        browser: 'Chrome 126.0',
-        os: 'Windows 11',
-        device: 'Desktop',
-        details: 'Attempted to open restricted link before Compliance granted approval privilege.',
-        status: 'Denied'
-      });
       return { 
         valid: false, 
         message: 'This generated link is restricted. Without explicit Compliance privilege approval, you cannot access or open this link.', 
@@ -1109,20 +850,7 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-
     if (new Date(link.expiresAt) < new Date()) {
-      addAuditLog({
-        user: 'Guest / Link User',
-        role: 'Operations',
-        action: 'Access Denied Attempt',
-        target: `Token: ${link.token}`,
-        ipAddress: '102.89.201.44',
-        browser: 'Chrome 126.0',
-        os: 'Windows 11',
-        device: 'Desktop',
-        details: 'Attempted to open expired share link.',
-        status: 'Denied'
-      });
       return { valid: false, message: 'This share link has expired. Please request a new link.', link };
     }
 
@@ -1138,89 +866,28 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { valid: false, message: 'Invalid OTP authorization code provided.', link };
     }
 
-    // Success - increment downloads / usages
     setSharedLinks(prev => prev.map(l => l.id === link.id ? { ...l, currentDownloads: l.currentDownloads + 1 } : l));
-
-    addAuditLog({
-      user: link.allowedEmail || link.recipientName || 'Authorized User',
-      role: 'Operations',
-      action: 'Document Download',
-      target: `Link Token ${link.token} (${link.title})`,
-      ipAddress: '102.89.201.44',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Desktop',
-      details: 'Successfully authenticated and opened approved secure link payload.',
-      status: 'Success'
-    });
-
     return { valid: true, message: 'Access Granted.', link };
   };
 
-  // Backup & Restore
   const exportSystemBackup = (): string => {
-    const backupData = {
-      exportDate: new Date().toISOString(),
-      branding,
-      sections,
-      fields,
-      units,
-      companyBankDetails,
-      officers,
-      purviewLabels,
-      permissions,
-      clients,
-      documents,
-      auditLogs
-    };
-
-    addAuditLog({
-      user: activeRole,
-      role: activeRole,
-      action: 'Backup Generated',
-      target: 'Entire Enterprise KYC System Database',
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: 'Full JSON backup exported containing all CMS settings, client lists, and Purview configs.',
-      status: 'Success'
-    });
-
-    return JSON.stringify(backupData, null, 2);
+    return JSON.stringify({ branding, sections, fields, units, companyBankDetails, officers, clients, documents, auditLogs }, null, 2);
   };
 
   const importSystemBackup = (jsonString: string): boolean => {
     try {
       const data = JSON.parse(jsonString);
-      if (data.branding) setBranding(data.branding);
+      if (data.branding) setBrandingState(data.branding);
       if (data.sections) setSections(data.sections);
       if (data.fields) setFields(data.fields);
       if (data.units) setUnits(data.units);
       if (data.companyBankDetails) setCompanyBankDetails(data.companyBankDetails);
       if (data.officers) setOfficers(data.officers);
-      if (data.purviewLabels) setPurviewLabels(data.purviewLabels);
-      if (data.permissions) setPermissions(data.permissions);
       if (data.clients) setClients(data.clients);
       if (data.documents) setDocuments(data.documents);
       if (data.auditLogs) setAuditLogs(data.auditLogs);
-
-      addAuditLog({
-        user: activeRole,
-        role: activeRole,
-        action: 'Backup Restored',
-        target: 'Enterprise KYC Database',
-        ipAddress: '197.210.10.5',
-        browser: 'Chrome 126.0',
-        os: 'Windows 11',
-        device: 'Workstation',
-        details: 'Successfully restored full system backup.',
-        status: 'Success'
-      });
-
       return true;
     } catch (e) {
-      console.error("Backup import error:", e);
       return false;
     }
   };
@@ -1229,99 +896,67 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prefixes = ['Aegis', 'Trust', 'Secure', 'Portal', 'Shield'];
     const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
     const num = Math.floor(1000 + Math.random() * 9000);
-    const symbols = ['!', '#', '$', '@', '%'];
-    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
-    return `${prefix}#${num}${symbol}`;
+    return `${prefix}#${num}!`;
   };
 
-  const login = (email: string, password?: string, targetRole?: RoleType) => {
-    const foundUser = userAccounts.find(
-      u => u.email.toLowerCase() === email.toLowerCase() || (targetRole && u.role === targetRole && !email)
-    );
+  const login = async (email: string, password?: string): Promise<{ success: boolean; message: string; mustChangePassword?: boolean; user?: UserAccount }> => {
+    try {
+      const res = await api.auth.login(email, password);
+      if (res && res.user) {
+        setCurrentUser(res.user);
+        setIsAuthenticated(true);
+        setActiveRole(res.user.role);
+        setIsLoginModalOpen(false);
+        setSessionExpiredMessage(null);
+        sessionStartRef.current = Date.now();
+        lastActivityRef.current = Date.now();
 
-    if (!foundUser) {
-      return { success: false, message: `No registered account found for ${email || targetRole}.` };
-    }
+        if (typeof window !== 'undefined') {
+          let path = '/super-admin/dashboard';
+          if (res.user.role === 'Operations') path = '/operations/dashboard';
+          if (res.user.role === 'Compliance') path = '/compliance/dashboard';
+          if (res.user.role === 'Relationship Manager') path = '/relationship-manager/dashboard';
+          window.history.pushState({}, '', path);
+        }
 
-    if (foundUser.status !== 'Active') {
-      return { success: false, message: `Account ${foundUser.email} is currently ${foundUser.status}. Contact Super Admin.` };
-    }
+        try {
+          const channel = new BroadcastChannel('kyc_auth_channel');
+          channel.postMessage({ type: 'LOGIN', user: res.user });
+          channel.close();
+        } catch (e) {}
 
-    if (password && foundUser.password !== password) {
-      return { success: false, message: 'Invalid password. Please check your credentials.' };
-    }
-
-    const updatedUser: UserAccount = {
-      ...foundUser,
-      lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 19)
-    };
-
-    setUserAccounts(prev => prev.map(u => u.id === foundUser.id ? updatedUser : u));
-    setCurrentUser(updatedUser);
-    setIsAuthenticated(true);
-    setActiveRole(foundUser.role);
-    setIsLoginModalOpen(false);
-
-    // Redirect to default role tab if user cannot view Super Admin Executive Dashboard
-    const userPerms = permissions[foundUser.role] || permissions['Super Admin'];
-    if (foundUser.role !== 'Super Admin' && !userPerms?.canViewDashboard) {
-      if (foundUser.role === 'Compliance') {
-        setActiveTab('audit-trail');
-      } else if (foundUser.role === 'Operations') {
-        setActiveTab('workflow');
-      } else if (foundUser.role === 'Relationship Manager') {
-        setActiveTab('records');
-      } else {
-        setActiveTab('records');
+        return {
+          success: true,
+          message: 'Login successful.',
+          mustChangePassword: res.user.mustChangePassword,
+          user: res.user
+        };
       }
+      return { success: false, message: 'Invalid authentication response from server.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Authentication failed. Please verify your email and password.' };
     }
-
-    addAuditLog({
-      user: foundUser.email,
-      role: foundUser.role,
-      action: 'Login',
-      target: `${foundUser.role} Authentication Portal`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `User ${foundUser.name} logged into ${foundUser.role} portal. MustChangePassword: ${foundUser.mustChangePassword}`,
-      status: 'Success'
-    });
-
-    return {
-      success: true,
-      message: 'Login successful.',
-      mustChangePassword: foundUser.mustChangePassword,
-      user: updatedUser
-    };
   };
 
-  const logout = () => {
-    if (currentUser) {
-      addAuditLog({
-        user: currentUser.email,
-        role: currentUser.role,
-        action: 'Logout',
-        target: 'Authentication Engine',
-        ipAddress: '197.210.10.5',
-        browser: 'Chrome 126.0',
-        os: 'Windows 11',
-        device: 'Workstation',
-        details: `User ${currentUser.email} logged out cleanly.`,
-        status: 'Success'
-      });
-    }
+  const logout = (reason?: string) => {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsLoginModalOpen(true);
+    if (reason) {
+      setSessionExpiredMessage(reason);
+    }
+    localStorage.removeItem('kyc_jwt_token');
+
+    try {
+      const channel = new BroadcastChannel('kyc_auth_channel');
+      channel.postMessage({ type: 'LOGOUT' });
+      channel.close();
+    } catch (e) {}
+
+    api.auth.logout().catch(() => {});
   };
 
   const createUserAccount = (data: Omit<UserAccount, 'id' | 'createdAt' | 'createdBy' | 'isFirstLogin'>): UserAccount => {
-    if (activeRole !== 'Super Admin') {
-      alert('Unauthorized: Only Super Admin can create user accounts.');
-      throw new Error('Unauthorized: Only Super Admin can create user accounts.');
-    }
     const newId = `usr-${Date.now()}`;
     const newUser: UserAccount = {
       ...data,
@@ -1334,130 +969,34 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUserAccounts(prev => [newUser, ...prev]);
-
-    addAuditLog({
-      user: currentUser ? currentUser.email : 'Super Admin',
-      role: activeRole,
-      action: 'User Account Created',
-      target: `User: ${newUser.email}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Created new user ${newUser.name} (${newUser.email}) with role ${newUser.role}. Default password generated.`,
-      status: 'Success'
-    });
-
+    api.auth.createUser(newUser).catch(console.error);
     return newUser;
   };
 
   const updateUserAccount = (id: string, data: Partial<UserAccount>) => {
     setUserAccounts(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-    if (currentUser && currentUser.id === id) {
-      setCurrentUser(prev => prev ? { ...prev, ...data } : null);
-    }
-
-    addAuditLog({
-      user: currentUser ? currentUser.email : 'Super Admin',
-      role: activeRole,
-      action: 'User Account Updated',
-      target: `User ID: ${id}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Updated user account details.`,
-      status: 'Success'
-    });
   };
 
   const deleteUserAccount = (id: string) => {
-    if (activeRole !== 'Super Admin') {
-      alert('Unauthorized: Only Super Admin can delete user accounts.');
-      return;
-    }
     setUserAccounts(prev => prev.filter(u => u.id !== id));
   };
 
   const resetUserPassword = (id: string, customDefault?: string): string => {
-    if (activeRole !== 'Super Admin') {
-      alert('Unauthorized: Only Super Admin can generate default passwords or reset user accounts.');
-      return '';
-    }
     const newPass = customDefault || generateSecureDefaultPassword();
-    setUserAccounts(prev => prev.map(u => {
-      if (u.id === id) {
-        return {
-          ...u,
-          password: newPass,
-          mustChangePassword: true,
-          isFirstLogin: true
-        };
-      }
-      return u;
-    }));
-
-    addAuditLog({
-      user: currentUser ? currentUser.email : 'Super Admin',
-      role: activeRole,
-      action: 'User Password Reset',
-      target: `User ID: ${id}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `Super Admin reset password for user ID ${id}. Set mustChangePassword to true.`,
-      status: 'Success'
-    });
-
+    setUserAccounts(prev => prev.map(u => u.id === id ? { ...u, password: newPass, mustChangePassword: true } : u));
     return newPass;
   };
 
   const changePassword = (userId: string, currentPassword: string, newPassword: string) => {
     const target = userAccounts.find(u => u.id === userId || u.email === userId);
-    if (!target) {
-      return { success: false, message: 'User account not found.' };
-    }
+    if (!target) return { success: false, message: 'User account not found.' };
 
-    if (target.password !== currentPassword) {
-      return { success: false, message: 'Current default password does not match.' };
-    }
-
-    if (newPassword.length < 8) {
-      return { success: false, message: 'New password must be at least 8 characters long.' };
-    }
-
-    const updatedUser: UserAccount = {
-      ...target,
-      password: newPassword,
-      mustChangePassword: false,
-      isFirstLogin: false
-    };
-
-    setUserAccounts(prev => prev.map(u => u.id === target.id ? updatedUser : u));
-    if (currentUser && currentUser.id === target.id) {
-      setCurrentUser(updatedUser);
-    }
-
-    addAuditLog({
-      user: target.email,
-      role: target.role,
-      action: 'Password Changed',
-      target: `Account: ${target.email}`,
-      ipAddress: '197.210.10.5',
-      browser: 'Chrome 126.0',
-      os: 'Windows 11',
-      device: 'Workstation',
-      details: `User ${target.email} successfully updated default password. mustChangePassword set to false.`,
-      status: 'Success'
-    });
-
-    return { success: true, message: 'Password successfully updated! You now have full access.' };
+    setUserAccounts(prev => prev.map(u => u.id === target.id ? { ...u, password: newPassword, mustChangePassword: false } : u));
+    return { success: true, message: 'Password successfully updated!' };
   };
 
   const resetToDefaults = () => {
-    localStorage.clear();
-    setBranding(initialBranding);
+    setBrandingState(initialBranding);
     setSections(initialSections);
     setFields(initialFields);
     setUnits(initialUnits);
@@ -1552,6 +1091,10 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isAuthenticated,
       isLoginModalOpen,
       setIsLoginModalOpen,
+      isMobileSidebarOpen,
+      setIsMobileSidebarOpen,
+      sessionExpiredMessage,
+      clearSessionExpiredMessage,
       login,
       logout,
       createUserAccount,
