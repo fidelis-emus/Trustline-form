@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useKYC } from '../../context/KYCContext';
+import { api } from '../../services/api';
 import { 
   Building2, 
   Upload, 
@@ -168,7 +169,7 @@ export const PublicKYCForm: React.FC = () => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
-  const handlePassportUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -176,10 +177,19 @@ export const PublicKYCForm: React.FC = () => {
         setPassportPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      try {
+        const res = await api.upload.file(file);
+        if (res?.fileUrl) {
+          setPassportPreview(res.fileUrl);
+        }
+      } catch (err) {
+        console.warn("Passport server upload fallback:", err);
+      }
     }
   };
 
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -187,6 +197,15 @@ export const PublicKYCForm: React.FC = () => {
         setSignaturePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      try {
+        const res = await api.upload.file(file);
+        if (res?.fileUrl) {
+          setSignaturePreview(res.fileUrl);
+        }
+      } catch (err) {
+        console.warn("Signature server upload fallback:", err);
+      }
     }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useKYC } from '../../context/KYCContext';
 import { Palette, Check, Save, Upload, Image as ImageIcon, Trash2, Building2 } from 'lucide-react';
+import { api } from '../../services/api';
 
 export const CMSBranding: React.FC = () => {
   const { branding, updateBranding, themeMode } = useKYC();
@@ -53,9 +54,19 @@ export const CMSBranding: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) compressAndSetImage(file, 'logoUrl');
+    if (file) {
+      compressAndSetImage(file, 'logoUrl');
+      try {
+        const res = await api.upload.logo(file);
+        if (res?.logoUrl) {
+          setFormBranding(prev => ({ ...prev, logoUrl: res.logoUrl }));
+        }
+      } catch (err) {
+        console.warn("Server logo upload fallback to compressed image:", err);
+      }
+    }
   };
 
   return (

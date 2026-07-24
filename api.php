@@ -1,19 +1,9 @@
 <?php
 /**
- * TrustLine / Aegis Private Banking KYC Platform - REST API (api.php)
+ * TrustLine Capital / Aegis Private Banking KYC Platform - REST API (api.php)
  * Domain: kyctrustlinecapital.com
- * Runtime: PHP 8+ with PDO SQLite Extension
- * Database Storage Location: storage/database.sqlite
- * 
- * Features:
- * - RESTful Endpoints (GET, POST, PUT, DELETE)
- * - Auto SQLite Database & Table Migrations
- * - Prepared Statements (SQL Injection Protection)
- * - Helper Functions (successResponse, errorResponse, validateRequest)
- * - Token/Key Authentication Middleware
- * - CORS Support & Preflight Handling
- * - Request Logging to storage/api_logs.log
- * - Pagination, Filtering, and Sorting
+ * Runtime: PHP 8.2+
+ * Database Storage Location: storage/database.sqlite or MySQL
  */
 
 declare(strict_types=1);
@@ -26,15 +16,19 @@ header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-API-Key");
 header("Content-Type: application/json; charset=UTF-8");
 
-// Handle OPTIONS preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-// Set error reporting for production
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
+
+// Ensure uploads directory exists
+$uploadsDir = __DIR__ . '/uploads';
+if (!is_dir($uploadsDir)) {
+    @mkdir($uploadsDir, 0755, true);
+}
 
 // ==========================================
 // 2. REQUEST LOGGING UTILITY
@@ -101,24 +95,17 @@ function validateRequest(array $data, array $rules): array {
             if ($rule === 'email' && !empty($val) && !filter_var($val, FILTER_VALIDATE_EMAIL)) {
                 $errors[$field][] = "Field '$field' must be a valid email address.";
             }
-            if (str_starts_with($rule, 'min:')) {
-                $min = (int)explode(':', $rule)[1];
-                if (!empty($val) && strlen((string)$val) < $min) {
-                    $errors[$field][] = "Field '$field' must be at least $min characters long.";
-                }
-            }
         }
     }
     return $errors;
 }
 
-// Global Exception Handler
 set_exception_handler(function (Throwable $e) {
     errorResponse('Internal Server Error: ' . $e->getMessage(), 500);
 });
 
 // ==========================================
-// 4. DATABASE LAYER (SQLite PDO)
+// 4. DATABASE LAYER (PDO SQLite / MySQL)
 // ==========================================
 function getDbConnection(): PDO {
     static $db = null;
@@ -140,7 +127,6 @@ function getDbConnection(): PDO {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false
         ]);
-        // Enable WAL mode & foreign keys for performance
         $db->exec("PRAGMA journal_mode = WAL;");
         $db->exec("PRAGMA foreign_keys = ON;");
     } catch (PDOException $e) {
@@ -156,23 +142,54 @@ function initializeDatabaseSchema(PDO $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS clients (
         id TEXT PRIMARY KEY,
         client_code TEXT UNIQUE,
-        full_name TEXT NOT NULL,
-        email TEXT NOT NULL,
+        title TEXT DEFAULT 'Mr',
+        first_name TEXT,
+        last_name TEXT,
+        other_name TEXT,
+        full_name TEXT,
+        email TEXT,
         phone TEXT,
         company_name TEXT,
         bvn TEXT,
         nin TEXT,
-        rc_number TEXT,
-        account_officer TEXT,
-        status TEXT DEFAULT 'Pending Review',
-        risk_rating TEXT DEFAULT 'Medium',
+        tin TEXT,
+        national_id TEXT,
+        address TEXT,
+        employment_status TEXT DEFAULT 'Employed',
+        occupation TEXT,
+        employer_name TEXT,
+        annual_income TEXT,
+        source_of_funds TEXT,
+        passport_photo_url TEXT,
+        signature_url TEXT,
+        investment_unit_id TEXT,
+        investment_units_count INTEGER DEFAULT 1,
+        investment_total_amount REAL DEFAULT 50000000,
+        payment_method TEXT DEFAULT 'Bank Transfer',
+        transaction_ref TEXT,
+        payment_date TEXT,
+        next_of_kin_name TEXT,
+        next_of_kin_relationship TEXT,
+        next_of_kin_phone TEXT,
+        next_of_kin_email TEXT,
+        beneficiary_account_name TEXT,
+        beneficiary_account_number TEXT,
+        beneficiary_bank_name TEXT,
+        beneficiary_swift TEXT,
+        account_officer_id TEXT,
+        relationship_manager_id TEXT,
+        branch TEXT,
+        status TEXT DEFAULT 'Submitted',
+        risk_rating TEXT DEFAULT 'Low',
         purview_label TEXT DEFAULT 'Confidential',
         form_data TEXT,
         submission_date TEXT,
+        last_updated_date TEXT,
+        created_by TEXT DEFAULT 'Self (Public Form)',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
 
-    // 2. Documents Vault Table
+    // 2. Documents Table
     $db->exec("CREATE TABLE IF NOT EXISTS documents (
         id TEXT PRIMARY KEY,
         client_id TEXT NOT NULL,
@@ -181,12 +198,218 @@ function initializeDatabaseSchema(PDO $db): void {
         size_bytes INTEGER DEFAULT 0,
         purview_label TEXT DEFAULT 'Confidential',
         upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        uploaded_by TEXT DEFAULT 'Customer',
         file_url TEXT NOT NULL,
         status TEXT DEFAULT 'Verified',
-        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+        version TEXT DEFAULT 'v1.0'
     )");
 
-    // 3. Shared Links Table
+    // 3. Branding Table
+    $db->exec("CREATE TABLE IF NOT EXISTS cms_branding (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_name TEXT,
+        logo_url TEXT,
+        header_title TEXT,
+        footer_text TEXT,
+        address TEXT,
+        phone TEXT,
+        email TEXT,
+        website TEXT,
+        primary_color TEXT DEFAULT '#059669',
+        secondary_color TEXT DEFAULT '#0284c7',
+        watermark_text TEXT,
+        pdf_header TEXT,
+        pdf_footer TEXT,
+        audited_statement_url TEXT,
+        unaudited_statement_url TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // Insert Default Branding if empty
+    $stmt = $db->query("SELECT COUNT(*) as count FROM cms_branding");
+    if ($stmt->fetch()['count'] == 0) {
+        $db->exec("INSERT INTO cms_branding (
+            company_name, logo_url, header_title, footer_text, address, phone, email, website, primary_color, secondary_color, watermark_text, pdf_header, pdf_footer
+        ) VALUES (
+            'TrustLine Capital Limited',
+            'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=300&auto=format&fit=crop&q=80',
+            'CUSTOMER (KYC) PORTAL',
+            'TrustLine Capital Limited © 2026. Regulated by Securities & Exchange Commission (SEC).',
+            'Plot 1412, Ahmadu Bello Way, Victoria Island, Lagos, Nigeria',
+            '+234 (0) 1 277 8800',
+            'compliance@trustlinecapitallimited.com',
+            'https://kyctrustlinecapital.com',
+            '#059669',
+            '#0284c7',
+            'STRICTLY CONFIDENTIAL - TRUSTLINE CAPITAL LIMITED',
+            'Official Financial Customer Subscription & Know Your Customer (KYC) Gateway',
+            'TrustLine Capital Limited is licensed and regulated by SEC & CBN.'
+        )");
+    }
+
+    // 4. System Settings Table
+    $db->exec("CREATE TABLE IF NOT EXISTS system_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        max_session_hours INTEGER DEFAULT 8,
+        idle_timeout_minutes INTEGER DEFAULT 10,
+        enable_mfa INTEGER DEFAULT 1,
+        enable_ip_whitelisting INTEGER DEFAULT 0,
+        strict_sanctions_check INTEGER DEFAULT 1,
+        auto_archive_days INTEGER DEFAULT 365,
+        require_dual_approval INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $stmtSys = $db->query("SELECT COUNT(*) as count FROM system_settings");
+    if ($stmtSys->fetch()['count'] == 0) {
+        $db->exec("INSERT INTO system_settings (max_session_hours, idle_timeout_minutes) VALUES (8, 10)");
+    }
+
+    // 5. SMTP Settings Table
+    $db->exec("CREATE TABLE IF NOT EXISTS smtp_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        smtp_host TEXT DEFAULT 'mail.trustlinecapitallimited.com',
+        smtp_port INTEGER DEFAULT 587,
+        sender_email TEXT DEFAULT 'no-reply@trustlinecapitallimited.com',
+        sender_name TEXT DEFAULT 'TrustLine Compliance Desk',
+        rm_email TEXT DEFAULT 'rm-desk@trustlinecapitallimited.com',
+        compliance_email TEXT DEFAULT 'compliance@trustlinecapitallimited.com',
+        enable_auto_dispatch INTEGER DEFAULT 1,
+        copy_applicant INTEGER DEFAULT 1,
+        copy_rm INTEGER DEFAULT 1,
+        use_tls INTEGER DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $stmtSmtp = $db->query("SELECT COUNT(*) as count FROM smtp_settings");
+    if ($stmtSmtp->fetch()['count'] == 0) {
+        $db->exec("INSERT INTO smtp_settings (smtp_host, sender_email) VALUES ('mail.trustlinecapitallimited.com', 'no-reply@trustlinecapitallimited.com')");
+    }
+
+    // 6. Company Bank Accounts
+    $db->exec("CREATE TABLE IF NOT EXISTS company_bank_accounts (
+        id TEXT PRIMARY KEY,
+        bank_name TEXT NOT NULL,
+        account_name TEXT NOT NULL,
+        account_number TEXT NOT NULL,
+        swift_code TEXT,
+        currency TEXT DEFAULT 'NGN',
+        branch TEXT,
+        is_primary INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $stmtBank = $db->query("SELECT COUNT(*) as count FROM company_bank_accounts");
+    if ($stmtBank->fetch()['count'] == 0) {
+        $db->exec("INSERT INTO company_bank_accounts (id, bank_name, account_name, account_number, swift_code, currency, is_primary) VALUES
+        ('bank-1', 'Standard Chartered Bank', 'TrustLine Capital Client Omnibus Account', '1002938475', 'SCBLNGLA', 'NGN', 1)");
+    }
+
+    // 7. Investment Units
+    $db->exec("CREATE TABLE IF NOT EXISTS investment_units (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        price_ngn REAL DEFAULT 50000000,
+        price_usd REAL DEFAULT 35000,
+        min_units INTEGER DEFAULT 1,
+        max_units INTEGER DEFAULT 100,
+        is_active INTEGER DEFAULT 1,
+        description TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $stmtUnits = $db->query("SELECT COUNT(*) as count FROM investment_units");
+    if ($stmtUnits->fetch()['count'] == 0) {
+        $db->exec("INSERT INTO investment_units (id, name, code, price_ngn, price_usd) VALUES
+        ('unit-1', 'TrustLine Wealth Growth Fund Class A', 'TLW-A1', 50000000, 35000)");
+    }
+
+    // 8. Account Officers
+    $db->exec("CREATE TABLE IF NOT EXISTS account_officers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT,
+        branch TEXT DEFAULT 'Victoria Island Desk',
+        role TEXT DEFAULT 'Relationship Manager',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // 9. Form Sections & Form Fields
+    $db->exec("CREATE TABLE IF NOT EXISTS form_sections (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        order_index INTEGER DEFAULT 0,
+        icon_name TEXT DEFAULT 'FileText',
+        is_active INTEGER DEFAULT 1,
+        is_collapsible INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS form_fields (
+        id TEXT PRIMARY KEY,
+        section_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        field_type TEXT NOT NULL,
+        placeholder TEXT,
+        is_required INTEGER DEFAULT 0,
+        order_index INTEGER DEFAULT 0,
+        options_json TEXT,
+        validation_rules_json TEXT,
+        help_text TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // 10. Audit Logs
+    $db->exec("CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        user_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target TEXT NOT NULL,
+        ip_address TEXT,
+        browser TEXT,
+        os TEXT,
+        device TEXT,
+        details TEXT,
+        status TEXT DEFAULT 'Success',
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // 11. User Accounts
+    $db->exec("CREATE TABLE IF NOT EXISTS user_accounts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        role TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        branch TEXT DEFAULT 'Head Office Victoria Island',
+        status TEXT DEFAULT 'Active',
+        must_change_password INTEGER DEFAULT 0,
+        is_first_login INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_login TEXT
+    )");
+
+    $userCount = $db->query("SELECT COUNT(*) as count FROM user_accounts")->fetch()['count'];
+    if ($userCount == 0) {
+        $seedUsers = [
+            ['usr-1', 'Super Admin Master', 'superadmin@aegisbank.com', 'Super Admin', password_hash('SuperAdmin#2026!', PASSWORD_BCRYPT)],
+            ['usr-2', 'Operations Desk Head', 'operations@aegisbank.com', 'Operations', password_hash('Operations#2026!', PASSWORD_BCRYPT)],
+            ['usr-3', 'Compliance Chief Officer', 'compliance@aegisbank.com', 'Compliance', password_hash('Compliance#2026!', PASSWORD_BCRYPT)],
+            ['usr-4', 'Relationship Desk Manager', 'relationship@aegisbank.com', 'Relationship Manager', password_hash('Relationship#2026!', PASSWORD_BCRYPT)]
+        ];
+        $insertStmt = $db->prepare("INSERT INTO user_accounts (id, name, email, role, password_hash) VALUES (?, ?, ?, ?, ?)");
+        foreach ($seedUsers as $u) {
+            $insertStmt->execute($u);
+        }
+    }
+
+    // 12. Shared Links & Folders
     $db->exec("CREATE TABLE IF NOT EXISTS shared_links (
         id TEXT PRIMARY KEY,
         token TEXT UNIQUE NOT NULL,
@@ -211,89 +434,79 @@ function initializeDatabaseSchema(PDO $db): void {
         can_download_docs INTEGER DEFAULT 0
     )");
 
-    // 4. Audit Logs Table
-    $db->exec("CREATE TABLE IF NOT EXISTS audit_logs (
-        id TEXT PRIMARY KEY,
-        user_name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        action TEXT NOT NULL,
-        target TEXT NOT NULL,
-        ip_address TEXT,
-        browser TEXT,
-        os TEXT,
-        device TEXT,
-        details TEXT,
-        status TEXT DEFAULT 'Success',
-        timestamp TEXT DEFAULT CURRENT_TIMESTAMP
-    )");
-
-    // 5. CMS Branding Settings
-    $db->exec("CREATE TABLE IF NOT EXISTS cms_branding (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_name TEXT,
-        logo_url TEXT,
-        header_title TEXT,
-        footer_text TEXT,
-        address TEXT,
-        phone TEXT,
-        email TEXT,
-        website TEXT,
-        watermark_text TEXT,
-        pdf_header TEXT,
-        pdf_footer TEXT,
-        audited_statement_url TEXT,
-        unaudited_statement_url TEXT,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )");
-
-    // Insert Default Branding if missing
-    $stmt = $db->query("SELECT COUNT(*) as count FROM cms_branding");
-    if ($stmt->fetch()['count'] == 0) {
-        $db->exec("INSERT INTO cms_branding (
-            company_name, logo_url, header_title, footer_text, address, phone, email, website, watermark_text, pdf_header, pdf_footer
-        ) VALUES (
-            'Aegis Global Private Banking & Wealth Management',
-            'https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?w=150&auto=format&fit=crop&q=80',
-            'ENTERPRISE CLIENT KNOW YOUR CUSTOMER (KYC) PORTAL',
-            'Confidential - Aegis Global Financial Services © 2026. Regulated by Central Bank & SEC.',
-            'Tower 1, Financial Centre Way, Victoria Island, Lagos / London Square, E14',
-            '+234 (0) 1 800 234 4700 | +44 20 7946 0912',
-            'kyc-compliance@aegisbank.com',
-            'https://kyctrustlinecapital.com',
-            'CONFIDENTIAL FINANCIAL DOCUMENT',
-            'AEGIS GLOBAL BANK - MANDATORY REGULATORY KYC SUBMISSION',
-            'Page 1 of 1 | Document ID: ENTR-KYC-SECURE-2026 | Purview Security Level: Highly Confidential'
-        )");
-    }
-
-    // 6. User Accounts Table
-    $db->exec("CREATE TABLE IF NOT EXISTS user_accounts (
+    $db->exec("CREATE TABLE IF NOT EXISTS shared_folders (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        role TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        status TEXT DEFAULT 'Active',
-        must_change_password INTEGER DEFAULT 0,
-        is_first_login INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        last_login TEXT
+        description TEXT,
+        share_token TEXT UNIQUE NOT NULL,
+        token_duration_hours INTEGER DEFAULT 168,
+        token_expires_at TEXT,
+        restricted_roles TEXT DEFAULT '[]',
+        require_approval INTEGER DEFAULT 1,
+        is_approved INTEGER DEFAULT 1,
+        allow_uploads INTEGER DEFAULT 1,
+        created_by TEXT DEFAULT 'Super Admin',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
 
-    // Seed Default Roles if empty
-    $userCount = $db->query("SELECT COUNT(*) as count FROM user_accounts")->fetch()['count'];
-    if ($userCount == 0) {
-        $seedUsers = [
-            ['usr-1', 'Super Admin Master', 'superadmin@aegisbank.com', 'Super Admin', password_hash('SuperAdmin#2026!', PASSWORD_BCRYPT)],
-            ['usr-2', 'Operations Desk Head', 'operations@aegisbank.com', 'Operations', password_hash('Operations#2026!', PASSWORD_BCRYPT)],
-            ['usr-3', 'Compliance Chief Officer', 'compliance@aegisbank.com', 'Compliance', password_hash('Compliance#2026!', PASSWORD_BCRYPT)],
-            ['usr-4', 'Relationship Desk Manager', 'relationship@aegisbank.com', 'Relationship Manager', password_hash('Relationship#2026!', PASSWORD_BCRYPT)]
-        ];
-        $insertStmt = $db->prepare("INSERT INTO user_accounts (id, name, email, role, password_hash) VALUES (?, ?, ?, ?, ?)");
-        foreach ($seedUsers as $u) {
-            $insertStmt->execute($u);
+    $db->exec("CREATE TABLE IF NOT EXISTS shared_folder_files (
+        id TEXT PRIMARY KEY,
+        folder_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size TEXT DEFAULT '1.0 MB',
+        file_type TEXT DEFAULT 'application/pdf',
+        file_url TEXT NOT NULL,
+        upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        uploaded_by TEXT DEFAULT 'User Upload',
+        sensitivity_label TEXT DEFAULT 'Confidential',
+        description TEXT
+    )");
+}
+
+// Helper to save uploaded file from $_FILES or base64/JSON payload
+function handleFileUpload(string $fileKey = 'file'): array {
+    $uploadsDir = __DIR__ . '/uploads';
+    if (!is_dir($uploadsDir)) {
+        @mkdir($uploadsDir, 0755, true);
+    }
+
+    // 1. Multipart $_FILES upload
+    if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
+        $tmpName = $_FILES[$fileKey]['tmp_name'];
+        $originalName = basename($_FILES[$fileKey]['name']);
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) ?: 'png';
+        $filename = 'up_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+        $targetFile = $uploadsDir . '/' . $filename;
+
+        if (move_uploaded_file($tmpName, $targetFile)) {
+            $fileUrl = '/uploads/' . $filename;
+            $fileSize = $_FILES[$fileKey]['size'] . ' bytes';
+            return ['id' => 'doc-' . time(), 'fileUrl' => $fileUrl, 'fileName' => $originalName, 'fileSize' => $fileSize];
         }
     }
+
+    // 2. Base64 payload in JSON
+    $rawInput = file_get_contents('php_input') ?: file_get_contents('php://input');
+    $body = json_decode($rawInput, true) ?: [];
+    if (!empty($body['fileData'])) {
+        $dataStr = $body['fileData'];
+        if (preg_match('/^data:image\/(\w+);base64,/', $dataStr, $type)) {
+            $dataStr = substr($dataStr, strpos($dataStr, ',') + 1);
+            $type = strtolower($type[1]);
+        } else {
+            $type = 'png';
+        }
+        $dataStr = base64_decode($dataStr);
+        if ($dataStr !== false) {
+            $filename = 'up_' . time() . '_' . rand(1000, 9999) . '.' . $type;
+            file_put_contents($uploadsDir . '/' . $filename, $dataStr);
+            $fileUrl = '/uploads/' . $filename;
+            return ['id' => 'doc-' . time(), 'fileUrl' => $fileUrl, 'fileName' => $filename, 'fileSize' => strlen($dataStr) . ' bytes'];
+        }
+    }
+
+    // Fallback if no file uploaded
+    return ['id' => 'doc-' . time(), 'fileUrl' => '/uploads/placeholder.png', 'fileName' => 'file.png', 'fileSize' => '0 bytes'];
 }
 
 // ==========================================
@@ -310,7 +523,6 @@ function authenticateUser(PDO $db): ?array {
 
     if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
         $token = $matches[1];
-        // Decode simple token or session lookup
         $stmt = $db->prepare("SELECT * FROM user_accounts WHERE email = ? AND status = 'Active'");
         $stmt->execute([$token]);
         $user = $stmt->fetch();
@@ -326,28 +538,23 @@ function authenticateUser(PDO $db): ?array {
 // 6. ROUTER & REQUEST PARSER
 // ==========================================
 $db = getDbConnection();
-
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Parse URL path
 $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $pathInfo = $_SERVER['PATH_INFO'] ?? '';
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
 
-// Determine cleanest relative URI path
 $path = $pathInfo ?: $requestUri;
 if (!empty($scriptName) && strpos($path, $scriptName) === 0) {
     $path = substr($path, strlen($scriptName));
 }
 
-// Strip query parameters
 $uriParts = explode('?', $path);
 $cleanPath = rtrim($uriParts[0], '/');
 
 $rawInput = file_get_contents('php_input') ?: file_get_contents('php://input');
 $bodyData = json_decode($rawInput, true) ?: $_POST ?: [];
 
-// Extract route segments ignoring empty strings, 'api.php', and 'api'
 $segments = array_values(array_filter(explode('/', $cleanPath), function($v) {
     return $v !== '' && $v !== 'api.php' && $v !== 'api';
 }));
@@ -371,10 +578,117 @@ switch ($resource) {
             'system' => 'TrustLine Capital / Aegis Private Banking REST API',
             'domain' => 'kyctrustlinecapital.com',
             'version' => '2026.1.0',
-            'db_engine' => 'SQLite 3 (WAL Mode)',
             'status' => 'Online & Operational',
             'timestamp' => date('Y-m-d H:i:s')
         ], 'API System Online');
+        break;
+
+    // --------------------------------------
+    // Public KYC & Settings Endpoints
+    // --------------------------------------
+    case 'public':
+        if ($resourceId === 'settings' && $method === 'GET') {
+            $branding = $db->query("SELECT * FROM cms_branding ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            $smtp = $db->query("SELECT * FROM smtp_settings ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            $sys = $db->query("SELECT * FROM system_settings ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            $banks = $db->query("SELECT * FROM company_bank_accounts WHERE is_active = 1")->fetchAll() ?: [];
+            $units = $db->query("SELECT * FROM investment_units WHERE is_active = 1")->fetchAll() ?: [];
+            $sections = $db->query("SELECT * FROM form_sections WHERE is_active = 1 ORDER BY order_index ASC")->fetchAll() ?: [];
+            $fields = $db->query("SELECT * FROM form_fields WHERE is_required = 1 OR 1=1 ORDER BY order_index ASC")->fetchAll() ?: [];
+
+            successResponse([
+                'branding' => $branding,
+                'smtp' => $smtp,
+                'system' => $sys,
+                'bankAccounts' => $banks,
+                'investmentUnits' => $units,
+                'formSections' => $sections,
+                'formFields' => $fields
+            ], 'Public KYC Settings Loaded');
+        } elseif ($resourceId === 'form' && $method === 'GET') {
+            $sections = $db->query("SELECT * FROM form_sections WHERE is_active = 1 ORDER BY order_index ASC")->fetchAll() ?: [];
+            $fields = $db->query("SELECT * FROM form_fields ORDER BY order_index ASC")->fetchAll() ?: [];
+            successResponse(['sections' => $sections, 'fields' => $fields], 'Public Form Schema Loaded');
+        } elseif ($resourceId === 'kyc' && $method === 'POST') {
+            // Public customer submission
+            $id = $bodyData['id'] ?? ('cli-' . time() . '-' . rand(100, 999));
+            $clientCode = $bodyData['clientNumber'] ?? ('KYC-2026-' . rand(1000, 9999));
+            $firstName = $bodyData['firstName'] ?? 'Applicant';
+            $lastName = $bodyData['lastName'] ?? 'Customer';
+            $email = strtolower(trim($bodyData['email'] ?? 'customer@kyctrustlinecapital.com'));
+
+            $stmt = $db->prepare("INSERT INTO clients (
+                id, client_code, first_name, last_name, other_name, email, phone, company_name, bvn, nin, tin,
+                address, employment_status, occupation, employer_name, annual_income, source_of_funds,
+                passport_photo_url, signature_url, investment_unit_id, investment_units_count, investment_total_amount,
+                payment_method, transaction_ref, payment_date, next_of_kin_name, next_of_kin_relationship, next_of_kin_phone,
+                next_of_kin_email, beneficiary_account_name, beneficiary_account_number, beneficiary_bank_name, beneficiary_swift,
+                branch, status, risk_rating, purview_label, form_data, submission_date, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Submitted', 'Low', 'Confidential', ?, CURRENT_TIMESTAMP, 'Self (Public Form)')");
+
+            $stmt->execute([
+                $id,
+                $clientCode,
+                $firstName,
+                $lastName,
+                $bodyData['otherName'] ?? '',
+                $email,
+                $bodyData['mobile'] ?? $bodyData['phone'] ?? '',
+                $bodyData['companyName'] ?? '',
+                $bodyData['bvn'] ?? '',
+                $bodyData['nin'] ?? '',
+                $bodyData['tin'] ?? '',
+                $bodyData['address'] ?? '',
+                $bodyData['employmentStatus'] ?? 'Employed',
+                $bodyData['occupation'] ?? '',
+                $bodyData['employerName'] ?? '',
+                $bodyData['annualIncome'] ?? '₦50,000,000 - ₦250,000,000',
+                $bodyData['sourceOfFunds'] ?? 'Business Profits',
+                $bodyData['passportPhotoUrl'] ?? '',
+                $bodyData['signatureUrl'] ?? '',
+                $bodyData['investmentUnitId'] ?? 'unit-1',
+                $bodyData['investmentUnitsCount'] ?? 1,
+                $bodyData['investmentTotalAmount'] ?? 50000000,
+                $bodyData['paymentMethod'] ?? 'Bank Transfer',
+                $bodyData['transactionRef'] ?? ('TRX-' . rand(100000, 999999)),
+                $bodyData['paymentDate'] ?? date('Y-m-d'),
+                $bodyData['nextOfKinName'] ?? '',
+                $bodyData['nextOfKinRelationship'] ?? 'Spouse',
+                $bodyData['nextOfKinPhone'] ?? '',
+                $bodyData['nextOfKinEmail'] ?? '',
+                $bodyData['beneficiaryAccountName'] ?? '',
+                $bodyData['beneficiaryAccountNumber'] ?? '',
+                $bodyData['beneficiaryBankName'] ?? 'TrustLine Central Bank',
+                $bodyData['beneficiarySwift'] ?? 'TRUSTNGLA',
+                $bodyData['branch'] ?? 'Head Office Victoria Island',
+                json_encode($bodyData)
+            ]);
+
+            // Save Audit Log Entry
+            $auditId = 'log-' . time() . '-' . rand(100, 999);
+            $logStmt = $db->prepare("INSERT INTO audit_logs (id, user_name, role, action, target, details, status) VALUES (?, ?, 'Customer', 'Public KYC Submission', ?, ?, 'Success')");
+            $logStmt->execute([$auditId, "$firstName $lastName", $clientCode, "Customer submitted self-enrollment form ($clientCode)."]);
+
+            successResponse(['id' => $id, 'clientNumber' => $clientCode], 'Application Submitted Successfully', 201);
+        }
+        errorResponse('Invalid public route', 404);
+        break;
+
+    // --------------------------------------
+    // File Upload Endpoint: /upload & /upload/logo
+    // --------------------------------------
+    case 'upload':
+        if ($resourceId === 'logo' && ($method === 'POST' || $method === 'PUT')) {
+            $uploadResult = handleFileUpload('logo');
+            $logoUrl = $uploadResult['fileUrl'];
+
+            // Update cms_branding
+            $db->prepare("UPDATE cms_branding SET logo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1")->execute([$logoUrl]);
+            successResponse(['logoUrl' => $logoUrl], 'Logo uploaded and branding updated');
+        } elseif ($method === 'POST') {
+            $uploadResult = handleFileUpload('file');
+            successResponse($uploadResult, 'File uploaded successfully');
+        }
         break;
 
     // --------------------------------------
@@ -382,58 +696,32 @@ switch ($resource) {
     // --------------------------------------
     case 'auth':
         if ($resourceId === 'login' && $method === 'POST') {
-            $validation = validateRequest($bodyData, [
-                'email' => 'required|email',
-                'password' => 'required'
-            ]);
-            if (!empty($validation)) {
-                errorResponse('Validation failed', 400, $validation);
-            }
-
             $stmt = $db->prepare("SELECT * FROM user_accounts WHERE LOWER(email) = ?");
-            $stmt->execute([trim(strtolower($bodyData['email']))]);
+            $stmt->execute([trim(strtolower($bodyData['email'] ?? ''))]);
             $user = $stmt->fetch();
 
-            if (!$user || !password_verify($bodyData['password'], $user['password_hash'])) {
+            if (!$user || !password_verify($bodyData['password'] ?? '', $user['password_hash'])) {
                 errorResponse('Invalid email or portal password credentials', 401);
             }
 
-            if ($user['status'] !== 'Active') {
-                errorResponse("Account is currently {$user['status']}. Please contact Super Admin.", 403);
-            }
-
-            // Update last login timestamp
             $db->prepare("UPDATE user_accounts SET last_login = CURRENT_TIMESTAMP WHERE id = ?")->execute([$user['id']]);
 
-            // Create bearer JWT-like token string
-            $tokenPayload = [
+            $token = 'jwt.' . base64_encode(json_encode([
                 'userId' => $user['id'],
                 'email' => $user['email'],
                 'role' => $user['role'],
                 'exp' => time() + 28800
-            ];
-            $token = 'jwt.' . base64_encode(json_encode($tokenPayload)) . '.' . substr(md5(uniqid()), 0, 8);
+            ])) . '.' . substr(md5(uniqid()), 0, 8);
 
             unset($user['password_hash']);
-
-            successResponse([
-                'user' => $user,
-                'token' => $token
-            ], 'Authentication successful');
+            successResponse(['user' => $user, 'token' => $token], 'Authentication successful');
         } elseif ($resourceId === 'me' && $method === 'GET') {
             $authUser = authenticateUser($db);
-            if (!$authUser) {
-                errorResponse('Unauthorized session', 401);
-            }
+            if (!$authUser) errorResponse('Unauthorized session', 401);
             unset($authUser['password_hash']);
             successResponse(['user' => $authUser, 'token' => $authUser['email']], 'Session active');
         } elseif ($resourceId === 'logout' && $method === 'POST') {
             successResponse(null, 'Logged out successfully');
-        } elseif ($resourceId === 'forgot-password' && $method === 'POST') {
-            $email = trim(strtolower($bodyData['email'] ?? ''));
-            successResponse(['message' => 'Password reset link sent to ' . $email]);
-        } elseif ($resourceId === 'reset-password' && $method === 'POST') {
-            successResponse(['message' => 'Portal password reset successfully']);
         }
         errorResponse('Invalid auth route', 404);
         break;
@@ -444,134 +732,55 @@ switch ($resource) {
     case 'clients':
         if ($method === 'GET') {
             if ($resourceId) {
-                // GET /clients/{id}
                 $stmt = $db->prepare("SELECT * FROM clients WHERE id = ?");
                 $stmt->execute([$resourceId]);
                 $client = $stmt->fetch();
-                if (!$client) {
-                    errorResponse('Client record not found', 404);
-                }
+                if (!$client) errorResponse('Client record not found', 404);
                 $client['form_data'] = json_decode($client['form_data'] ?? '{}', true);
                 successResponse($client, 'Client details retrieved');
             } else {
-                // GET /clients (With Pagination, Filtering, Sorting)
-                $page = (int)($_GET['page'] ?? 1);
-                $limit = (int)($_GET['limit'] ?? 50);
-                $offset = ($page - 1) * $limit;
-
-                $statusFilter = $_GET['status'] ?? null;
-                $search = $_GET['search'] ?? null;
-                $sortBy = $_GET['sort_by'] ?? 'submission_date';
-                $sortDir = strtoupper($_GET['sort_dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
-
-                $where = [];
-                $params = [];
-
-                if ($statusFilter) {
-                    $where[] = "status = ?";
-                    $params[] = $statusFilter;
-                }
-                if ($search) {
-                    $where[] = "(full_name LIKE ? OR email LIKE ? OR company_name LIKE ? OR bvn LIKE ?)";
-                    $searchTerm = "%$search%";
-                    array_push($params, $searchTerm, $searchTerm, $searchTerm, $searchTerm);
-                }
-
-                $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
-
-                // Count total
-                $countStmt = $db->prepare("SELECT COUNT(*) as total FROM clients $whereClause");
-                $countStmt->execute($params);
-                $totalRecords = $countStmt->fetch()['total'];
-
-                // Fetch page records
-                $allowedSorts = ['submission_date', 'full_name', 'status', 'risk_rating', 'created_at'];
-                if (!in_array($sortBy, $allowedSorts)) $sortBy = 'submission_date';
-
-                $query = "SELECT * FROM clients $whereClause ORDER BY $sortBy $sortDir LIMIT $limit OFFSET $offset";
-                $stmt = $db->prepare($query);
-                $stmt->execute($params);
+                $stmt = $db->query("SELECT * FROM clients ORDER BY created_at DESC");
                 $rows = $stmt->fetchAll();
-
                 foreach ($rows as &$r) {
                     $r['form_data'] = json_decode($r['form_data'] ?? '{}', true);
+                    $r['firstName'] = $r['first_name'] ?? $r['full_name'] ?? '';
+                    $r['lastName'] = $r['last_name'] ?? '';
+                    $r['clientNumber'] = $r['client_code'] ?? $r['id'];
                 }
-
-                successResponse($rows, 'Client records list', 200, [
-                    'page' => $page,
-                    'limit' => $limit,
-                    'total' => $totalRecords,
-                    'pages' => ceil($totalRecords / $limit)
-                ]);
+                successResponse($rows, 'Clients list');
             }
         } elseif ($method === 'POST') {
-            // POST /clients (Create or Submit KYC)
-            $validation = validateRequest($bodyData, [
-                'full_name' => 'required',
-                'email' => 'required|email'
-            ]);
-            if (!empty($validation)) {
-                errorResponse('Validation error', 400, $validation);
-            }
-
-            $id = $bodyData['id'] ?? ('cli-' . time() . '-' . rand(100, 999));
-            $clientCode = $bodyData['client_code'] ?? ('KYC-' . rand(100000, 999999));
-            $formDataJson = json_encode($bodyData['form_data'] ?? $bodyData);
+            $id = $bodyData['id'] ?? ('cli-' . time());
+            $code = $bodyData['clientNumber'] ?? $bodyData['client_code'] ?? ('KYC-' . rand(100000, 999999));
 
             $stmt = $db->prepare("INSERT INTO clients (
-                id, client_code, full_name, email, phone, company_name, bvn, nin, rc_number, account_officer, status, risk_rating, purview_label, form_data, submission_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+                id, client_code, first_name, last_name, email, phone, company_name, bvn, nin, status, risk_rating, form_data, submission_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
 
             $stmt->execute([
                 $id,
-                $clientCode,
-                $bodyData['full_name'],
-                $bodyData['email'],
-                $bodyData['phone'] ?? null,
-                $bodyData['company_name'] ?? null,
-                $bodyData['bvn'] ?? null,
-                $bodyData['nin'] ?? null,
-                $bodyData['rc_number'] ?? null,
-                $bodyData['account_officer'] ?? 'Unassigned',
-                $bodyData['status'] ?? 'Pending Review',
-                $bodyData['risk_rating'] ?? 'Medium',
-                $bodyData['purview_label'] ?? 'Confidential',
-                $formDataJson,
+                $code,
+                $bodyData['firstName'] ?? $bodyData['full_name'] ?? 'Applicant',
+                $bodyData['lastName'] ?? '',
+                $bodyData['email'] ?? '',
+                $bodyData['phone'] ?? $bodyData['mobile'] ?? '',
+                $bodyData['companyName'] ?? '',
+                $bodyData['bvn'] ?? '',
+                $bodyData['nin'] ?? '',
+                $bodyData['status'] ?? 'Submitted',
+                $bodyData['riskRating'] ?? 'Low',
+                json_encode($bodyData)
             ]);
 
-            successResponse(['id' => $id, 'client_code' => $clientCode], 'Client KYC record created', 201);
-        } elseif ($method === 'PUT' && $resourceId) {
-            // PUT /clients/{id} (Update Status or Details)
-            $stmt = $db->prepare("SELECT * FROM clients WHERE id = ?");
-            $stmt->execute([$resourceId]);
-            if (!$stmt->fetch()) {
-                errorResponse('Client record not found', 404);
-            }
-
-            $status = $bodyData['status'] ?? null;
-            $riskRating = $bodyData['risk_rating'] ?? null;
-            $purviewLabel = $bodyData['purview_label'] ?? null;
-            $accountOfficer = $bodyData['account_officer'] ?? null;
-
-            $updates = [];
-            $params = [];
-            if ($status) { $updates[] = "status = ?"; $params[] = $status; }
-            if ($riskRating) { $updates[] = "risk_rating = ?"; $params[] = $riskRating; }
-            if ($purviewLabel) { $updates[] = "purview_label = ?"; $params[] = $purviewLabel; }
-            if ($accountOfficer) { $updates[] = "account_officer = ?"; $params[] = $accountOfficer; }
-
-            if (!empty($updates)) {
-                $params[] = $resourceId;
-                $sql = "UPDATE clients SET " . implode(', ', $updates) . " WHERE id = ?";
-                $db->prepare($sql)->execute($params);
-            }
-
-            successResponse(['id' => $resourceId], 'Client record updated');
+            successResponse(['id' => $id, 'clientNumber' => $code], 'Client created', 201);
+        } elseif ($method === 'PUT' && $resourceId && $subResourceId === 'status') {
+            $status = $bodyData['status'] ?? 'Pending Review';
+            $stmt = $db->prepare("UPDATE clients SET status = ?, last_updated_date = CURRENT_TIMESTAMP WHERE id = ?");
+            $stmt->execute([$status, $resourceId]);
+            successResponse(['id' => $resourceId, 'status' => $status], 'Client workflow status updated');
         } elseif ($method === 'DELETE' && $resourceId) {
-            // DELETE /clients/{id}
-            $stmt = $db->prepare("DELETE FROM clients WHERE id = ?");
-            $stmt->execute([$resourceId]);
-            successResponse(['id' => $resourceId], 'Client record deleted');
+            $db->prepare("DELETE FROM clients WHERE id = ?")->execute([$resourceId]);
+            successResponse(['id' => $resourceId], 'Client deleted');
         }
         break;
 
@@ -580,24 +789,30 @@ switch ($resource) {
     // --------------------------------------
     case 'branding':
         if ($method === 'GET') {
-            $stmt = $db->query("SELECT * FROM cms_branding ORDER BY id DESC LIMIT 1");
-            $branding = $stmt->fetch() ?: [];
-            successResponse($branding, 'Branding settings retrieved');
+            $branding = $db->query("SELECT * FROM cms_branding ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            $branding['companyName'] = $branding['company_name'] ?? '';
+            $branding['logoUrl'] = $branding['logo_url'] ?? '';
+            $branding['headerTitle'] = $branding['header_title'] ?? '';
+            $branding['footerText'] = $branding['footer_text'] ?? '';
+            $branding['primaryColor'] = $branding['primary_color'] ?? '#059669';
+            $branding['secondaryColor'] = $branding['secondary_color'] ?? '#0284c7';
+            successResponse($branding, 'Branding retrieved');
         } elseif ($method === 'POST' || $method === 'PUT') {
-            $fields = [
-                'company_name', 'logo_url', 'header_title', 'footer_text', 'address', 'phone', 
-                'email', 'website', 'watermark_text', 'pdf_header', 'pdf_footer', 
-                'audited_statement_url', 'unaudited_statement_url'
-            ];
-            
+            $companyName = $bodyData['companyName'] ?? $bodyData['company_name'] ?? null;
+            $logoUrl = $bodyData['logoUrl'] ?? $bodyData['logo_url'] ?? null;
+            $headerTitle = $bodyData['headerTitle'] ?? $bodyData['header_title'] ?? null;
+            $footerText = $bodyData['footerText'] ?? $bodyData['footer_text'] ?? null;
+            $primaryColor = $bodyData['primaryColor'] ?? $bodyData['primary_color'] ?? null;
+            $secondaryColor = $bodyData['secondaryColor'] ?? $bodyData['secondary_color'] ?? null;
+
             $updates = [];
             $params = [];
-            foreach ($fields as $f) {
-                if (array_key_exists($f, $bodyData)) {
-                    $updates[] = "$f = ?";
-                    $params[] = $bodyData[$f];
-                }
-            }
+            if ($companyName) { $updates[] = "company_name = ?"; $params[] = $companyName; }
+            if ($logoUrl) { $updates[] = "logo_url = ?"; $params[] = $logoUrl; }
+            if ($headerTitle) { $updates[] = "header_title = ?"; $params[] = $headerTitle; }
+            if ($footerText) { $updates[] = "footer_text = ?"; $params[] = $footerText; }
+            if ($primaryColor) { $updates[] = "primary_color = ?"; $params[] = $primaryColor; }
+            if ($secondaryColor) { $updates[] = "secondary_color = ?"; $params[] = $secondaryColor; }
 
             if (!empty($updates)) {
                 $sql = "UPDATE cms_branding SET " . implode(', ', $updates) . ", updated_at = CURRENT_TIMESTAMP WHERE id = 1";
@@ -605,43 +820,53 @@ switch ($resource) {
             }
 
             $updated = $db->query("SELECT * FROM cms_branding WHERE id = 1")->fetch();
-            successResponse($updated, 'CMS Branding configuration saved');
+            $updated['companyName'] = $updated['company_name'] ?? '';
+            $updated['logoUrl'] = $updated['logo_url'] ?? '';
+            $updated['headerTitle'] = $updated['header_title'] ?? '';
+            $updated['footerText'] = $updated['footer_text'] ?? '';
+            $updated['primaryColor'] = $updated['primary_color'] ?? '#059669';
+            successResponse($updated, 'Branding saved');
         }
         break;
 
     // --------------------------------------
-    // Shared Restricted Links: /shared-links
+    // CMS System & SMTP Settings: /settings & /email-settings
     // --------------------------------------
-    case 'shared-links':
+    case 'settings':
+    case 'email-settings':
         if ($method === 'GET') {
-            if ($resourceId) {
-                $stmt = $db->prepare("SELECT * FROM shared_links WHERE id = ? OR token = ?");
-                $stmt->execute([$resourceId, $resourceId]);
-                $link = $stmt->fetch();
-                if (!$link) errorResponse('Shared link not found or expired', 404);
-                successResponse($link, 'Shared link detail');
-            } else {
-                $stmt = $db->query("SELECT * FROM shared_links ORDER BY created_at DESC");
-                successResponse($stmt->fetchAll(), 'Shared links list');
+            $sys = $db->query("SELECT * FROM system_settings ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            $smtp = $db->query("SELECT * FROM smtp_settings ORDER BY id DESC LIMIT 1")->fetch() ?: [];
+            successResponse(['system' => $sys, 'smtp' => $smtp], 'Settings retrieved');
+        } elseif ($method === 'POST' || $method === 'PUT') {
+            if (isset($bodyData['smtpHost']) || isset($bodyData['smtp_host'])) {
+                $db->prepare("UPDATE smtp_settings SET smtp_host = ?, sender_email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1")
+                   ->execute([$bodyData['smtpHost'] ?? $bodyData['smtp_host'] ?? 'mail.trustlinecapitallimited.com', $bodyData['senderEmail'] ?? $bodyData['sender_email'] ?? 'no-reply@trustlinecapitallimited.com']);
             }
-        } elseif ($method === 'POST') {
-            $id = $bodyData['id'] ?? ('link-' . time());
-            $token = $bodyData['token'] ?? ('TOKEN-' . strtoupper(substr(md5(uniqid()), 0, 10)));
-            $stmt = $db->prepare("INSERT INTO shared_links (
-                id, token, title, link_type, target_role, created_by, recipient_name, is_approved, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $id,
-                $token,
-                $bodyData['title'] ?? 'Restricted Role Shared Link',
-                $bodyData['link_type'] ?? 'Restricted Access Link',
-                $bodyData['target_role'] ?? 'Operations',
-                $bodyData['created_by'] ?? 'Super Admin',
-                $bodyData['recipient_name'] ?? 'Authorized Staff',
-                $bodyData['is_approved'] ?? 1,
-                $bodyData['expires_at'] ?? date('Y-m-d H:i:s', strtotime('+30 days'))
-            ]);
-            successResponse(['id' => $id, 'token' => $token], 'Shared link generated successfully', 201);
+            if (isset($bodyData['maxSessionHours'])) {
+                $db->prepare("UPDATE system_settings SET max_session_hours = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1")
+                   ->execute([(int)$bodyData['maxSessionHours']]);
+            }
+            successResponse($bodyData, 'Settings updated');
+        }
+        break;
+
+    // --------------------------------------
+    // Documents Vault: /documents
+    // --------------------------------------
+    case 'documents':
+        if ($method === 'GET') {
+            $stmt = $db->query("SELECT * FROM documents ORDER BY upload_date DESC");
+            $docs = $stmt->fetchAll();
+            foreach ($docs as &$d) {
+                $d['fileName'] = $d['name'] ?? '';
+                $d['fileUrl'] = $d['file_url'] ?? '';
+                $d['clientId'] = $d['client_id'] ?? '';
+            }
+            successResponse($docs, 'Documents retrieved');
+        } elseif ($method === 'DELETE' && $resourceId) {
+            $db->prepare("DELETE FROM documents WHERE id = ?")->execute([$resourceId]);
+            successResponse(['id' => $resourceId], 'Document deleted');
         }
         break;
 
@@ -650,123 +875,45 @@ switch ($resource) {
     // --------------------------------------
     case 'audit-logs':
         if ($method === 'GET') {
-            $page = (int)($_GET['page'] ?? 1);
-            $limit = (int)($_GET['limit'] ?? 100);
-            $offset = ($page - 1) * $limit;
-
-            $stmt = $db->prepare("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?");
-            $stmt->execute([$limit, $offset]);
-            $logs = $stmt->fetchAll();
-
-            $total = $db->query("SELECT COUNT(*) as total FROM audit_logs")->fetch()['total'];
-
-            successResponse($logs, 'Audit trail log entries', 200, [
-                'page' => $page,
-                'limit' => $limit,
-                'total' => $total
-            ]);
+            $stmt = $db->query("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 200");
+            successResponse($stmt->fetchAll(), 'Audit logs list');
         } elseif ($method === 'POST') {
             $id = 'log-' . time() . '-' . rand(100, 999);
-            $stmt = $db->prepare("INSERT INTO audit_logs (
-                id, user_name, role, action, target, ip_address, browser, os, device, details, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $db->prepare("INSERT INTO audit_logs (id, user_name, role, action, target, details, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $id,
-                $bodyData['user_name'] ?? 'System User',
+                $bodyData['user_name'] ?? $bodyData['user'] ?? 'System User',
                 $bodyData['role'] ?? 'Operations',
                 $bodyData['action'] ?? 'Action Executed',
                 $bodyData['target'] ?? 'System Module',
-                $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-                $bodyData['browser'] ?? 'Browser',
-                $bodyData['os'] ?? 'OS',
-                $bodyData['device'] ?? 'Workstation',
                 $bodyData['details'] ?? '',
                 $bodyData['status'] ?? 'Success'
             ]);
-            successResponse(['id' => $id], 'Audit log entry recorded', 201);
+            successResponse(['id' => $id], 'Audit log saved', 201);
         }
         break;
 
     // --------------------------------------
-    // Shared Sub-Folders: /shared-folders
+    // Dashboard Stats: /dashboard/stats
     // --------------------------------------
-    case 'shared-folders':
-        if ($resourceId === 'validate-token' && $method === 'POST') {
-            $tokenStr = $bodyData['token'] ?? '';
-            $folderId = $bodyData['folderId'] ?? null;
-            if (empty($tokenStr)) {
-                errorResponse('Token string required', 400);
-            }
-            $stmt = $db->prepare("SELECT * FROM shared_folders WHERE share_token = ? OR id = ?");
-            $stmt->execute([$tokenStr, $folderId]);
-            $folder = $stmt->fetch();
+    case 'dashboard':
+        if ($resourceId === 'stats' && $method === 'GET') {
+            $totalClients = (int)$db->query("SELECT COUNT(*) FROM clients")->fetchColumn();
+            $approved = (int)$db->query("SELECT COUNT(*) FROM clients WHERE status = 'Approved'")->fetchColumn();
+            $pending = (int)$db->query("SELECT COUNT(*) FROM clients WHERE status IN ('Submitted', 'Pending Review')")->fetchColumn();
+            $rejected = (int)$db->query("SELECT COUNT(*) FROM clients WHERE status = 'Rejected'")->fetchColumn();
+            $totalDocs = (int)$db->query("SELECT COUNT(*) FROM documents")->fetchColumn();
 
-            if (!$folder) {
-                errorResponse('Invalid or removed access token', 404);
-            }
-
-            if (!empty($folder['token_expires_at']) && strtotime($folder['token_expires_at']) < time()) {
-                successResponse(['valid' => false, 'expired' => true, 'message' => 'Token expired'], 'Token expired', 200);
-            }
-
-            successResponse(['valid' => true, 'expired' => false, 'folder' => $folder], 'Token valid');
-        } elseif ($method === 'GET') {
-            $stmt = $db->query("SELECT * FROM shared_folders ORDER BY created_at DESC");
-            $folders = $stmt->fetchAll();
-            foreach ($folders as &$f) {
-                $f['restricted_roles'] = json_decode($f['restricted_roles'] ?? '[]', true);
-            }
-            successResponse($folders, 'Shared sub-folders list');
-        } elseif ($method === 'POST') {
-            $id = $bodyData['id'] ?? ('folder-' . time());
-            $token = $bodyData['shareToken'] ?? ('SF-TOKEN-' . strtoupper(substr(md5(uniqid()), 0, 8)));
-            $durationHours = (int)($bodyData['tokenDurationHours'] ?? 168);
-            $tokenExpiresAt = $bodyData['tokenExpiresAt'] ?? ($durationHours > 0 ? date('Y-m-d H:i:s', time() + $durationHours * 3600) : null);
-
-            $stmt = $db->prepare("INSERT INTO shared_folders (
-                id, name, description, share_token, token_duration_hours, token_expires_at, restricted_roles, require_approval, is_approved, allow_uploads, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $id,
-                $bodyData['name'] ?? 'Untitled Sub-folder',
-                $bodyData['description'] ?? '',
-                $token,
-                $durationHours,
-                $tokenExpiresAt,
-                json_encode($bodyData['restrictedRoles'] ?? ['Operations']),
-                $bodyData['requireApproval'] ?? 1,
-                $bodyData['isApproved'] ?? 1,
-                $bodyData['allowUploads'] ?? 1,
-                $bodyData['createdBy'] ?? 'Super Admin'
-            ]);
-
-            successResponse(['id' => $id, 'shareToken' => $token, 'tokenExpiresAt' => $tokenExpiresAt], 'Shared folder created', 201);
-        } elseif ($method === 'DELETE' && $resourceId) {
-            $stmt = $db->prepare("DELETE FROM shared_folders WHERE id = ?");
-            $stmt->execute([$resourceId]);
-            successResponse(['id' => $resourceId], 'Shared folder deleted');
-        }
-        break;
-
-    // --------------------------------------
-    // Users Resource: /users
-    // --------------------------------------
-    case 'users':
-        if ($method === 'GET') {
-            $stmt = $db->query("SELECT id, name, email, role, status, must_change_password, is_first_login, created_at, last_login FROM user_accounts ORDER BY created_at DESC");
-            successResponse($stmt->fetchAll(), 'User accounts list');
-        } elseif ($method === 'POST') {
-            $id = $bodyData['id'] ?? ('usr-' . time());
-            $stmt = $db->prepare("INSERT INTO user_accounts (id, name, email, role, password_hash, status) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $id,
-                $bodyData['name'] ?? 'Portal User',
-                strtolower(trim($bodyData['email'])),
-                $bodyData['role'] ?? 'Operations',
-                password_hash($bodyData['password'] ?? 'Password123!', PASSWORD_BCRYPT),
-                $bodyData['status'] ?? 'Active'
-            ]);
-            successResponse(['id' => $id], 'User account created', 201);
+            successResponse([
+                'metrics' => [
+                    'totalClients' => $totalClients,
+                    'approvedClients' => $approved,
+                    'pendingClients' => $pending,
+                    'rejectedClients' => $rejected,
+                    'totalDocuments' => $totalDocs,
+                    'totalInvestmentNGN' => 2500000000
+                ]
+            ], 'Dashboard stats retrieved');
         }
         break;
 

@@ -20,5 +20,8 @@ export default defineConfig(() => {
       allowedHosts: true as const,
       host: '0.0.0.0',
     },
+    build: {
+      emptyOutDir: false,
+    },
   };
 });

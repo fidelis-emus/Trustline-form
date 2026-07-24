@@ -55,6 +55,50 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  // Upload Utilities
+  upload: {
+    file: async (file: File): Promise<{ id: string; fileUrl: string; fileName: string; fileSize: string }> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const headers = getAuthHeader();
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || 'File upload failed');
+      }
+      return data.data;
+    },
+    logo: async (file: File): Promise<{ logoUrl: string }> => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const headers = getAuthHeader();
+      const res = await fetch(`${API_BASE}/upload/logo`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || 'Logo upload failed');
+      }
+      return data.data;
+    }
+  },
+
+  // Public Unauthenticated Gateway
+  public: {
+    getSettings: (): Promise<any> => request<any>('/public/settings'),
+    getForm: (): Promise<{ sections: FormSection[]; fields: FormField[] }> => request<{ sections: FormSection[]; fields: FormField[] }>('/public/form'),
+    submitKYC: (data: any): Promise<{ id: string; clientNumber: string }> => request<{ id: string; clientNumber: string }>('/public/kyc', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  },
+
   // Auth & User Accounts
   auth: {
     login: async (email: string, password?: string): Promise<{ token: string; user: UserAccount }> => {
