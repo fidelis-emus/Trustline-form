@@ -733,11 +733,19 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSharedFolderFiles(prev => [newFile, ...prev]);
+    api.sharedFolders.uploadFileRecord(newFile).catch(err => {
+      console.error('Failed to sync file record to backend:', err);
+    });
     return newFile;
   };
 
-  const deleteSharedFolderFile = (fileId: string) => {
+  const deleteSharedFolderFile = async (fileId: string) => {
     setSharedFolderFiles(prev => prev.filter(f => f.id !== fileId));
+    try {
+      await api.sharedFolders.deleteFileRecord(fileId);
+    } catch (e) {
+      console.error('Failed to delete file record on server:', e);
+    }
   };
 
   const generateFolderShareLink = (folderId: string, options?: { requireApproval?: boolean; restrictedRoles?: any[]; allowedEmail?: string }): SharedLink => {
@@ -900,8 +908,10 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message: string; mustChangePassword?: boolean; user?: UserAccount }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    
     try {
-      const res = await api.auth.login(email, password);
+      const res = await api.auth.login(cleanEmail, password);
       if (res && res.user) {
         setCurrentUser(res.user);
         setIsAuthenticated(true);
@@ -931,10 +941,17 @@ export const KYCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           mustChangePassword: res.user.mustChangePassword,
           user: res.user
         };
+      } else {
+        return {
+          success: false,
+          message: 'Authentication failed. Invalid credentials returned from auth service.'
+        };
       }
-      return { success: false, message: 'Invalid authentication response from server.' };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Authentication failed. Please verify your email and password.' };
+      return {
+        success: false,
+        message: err.message || 'Authentication failed. Please verify your email and password.'
+      };
     }
   };
 

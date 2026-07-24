@@ -46,10 +46,23 @@ let dbState = {
   },
   users: [
     {
-      id: 'u-alex',
+      id: 'u-superadmin',
       name: 'Alexander Wright',
-      email: 'alex.wright@trustlinecapitallimited.com',
+      email: 'superadmin@aegisbank.com',
       role: 'Super Admin',
+      password: 'SuperAdmin#2026!',
+      branch: 'Executive Directorate',
+      status: 'Active',
+      mustChangePassword: false,
+      isFirstLogin: false,
+      createdAt: '2026-01-01'
+    },
+    {
+      id: 'u-admin-trustline',
+      name: 'Super Admin Desk',
+      email: 'admin@trustlinecapitallimited.com',
+      role: 'Super Admin',
+      password: 'SuperAdmin#2026!',
       branch: 'Head Office Victoria Island',
       status: 'Active',
       mustChangePassword: false,
@@ -57,11 +70,24 @@ let dbState = {
       createdAt: '2026-01-01'
     },
     {
-      id: 'u-sarah',
-      name: 'Sarah Jenkins',
-      email: 'sarah.jenkins@trustlinecapitallimited.com',
-      role: 'Compliance',
+      id: 'u-alex',
+      name: 'Alexander Wright',
+      email: 'alex.wright@trustlinecapitallimited.com',
+      role: 'Super Admin',
+      password: 'SuperAdmin#2026!',
       branch: 'Head Office Victoria Island',
+      status: 'Active',
+      mustChangePassword: false,
+      isFirstLogin: false,
+      createdAt: '2026-01-01'
+    },
+    {
+      id: 'u-operations',
+      name: 'Oluwaseun Bakare',
+      email: 'operations@aegisbank.com',
+      role: 'Operations',
+      password: 'Operations#2026!',
+      branch: 'Central Operations Hub',
       status: 'Active',
       mustChangePassword: false,
       isFirstLogin: false,
@@ -72,7 +98,44 @@ let dbState = {
       name: 'David Sterling',
       email: 'david.sterling@trustlinecapitallimited.com',
       role: 'Operations',
+      password: 'Operations#2026!',
       branch: 'Victoria Island Branch',
+      status: 'Active',
+      mustChangePassword: false,
+      isFirstLogin: false,
+      createdAt: '2026-01-01'
+    },
+    {
+      id: 'u-compliance',
+      name: 'Dr. Farouk Al-Mansoor',
+      email: 'compliance@aegisbank.com',
+      role: 'Compliance',
+      password: 'Compliance#2026!',
+      branch: 'AML & Regulatory Secretariat',
+      status: 'Active',
+      mustChangePassword: false,
+      isFirstLogin: false,
+      createdAt: '2026-01-01'
+    },
+    {
+      id: 'u-sarah',
+      name: 'Sarah Jenkins',
+      email: 'sarah.jenkins@trustlinecapitallimited.com',
+      role: 'Compliance',
+      password: 'Compliance#2026!',
+      branch: 'Head Office Victoria Island',
+      status: 'Active',
+      mustChangePassword: false,
+      isFirstLogin: false,
+      createdAt: '2026-01-01'
+    },
+    {
+      id: 'u-rm',
+      name: 'Adebayo Adeleke',
+      email: 'relationship@aegisbank.com',
+      role: 'Relationship Manager',
+      password: 'Relationship#2026!',
+      branch: 'Victoria Island Wealth Hub',
       status: 'Active',
       mustChangePassword: false,
       isFirstLogin: false,
@@ -83,6 +146,7 @@ let dbState = {
       name: 'Rebecca Thorne',
       email: 'rebecca.thorne@trustlinecapitallimited.com',
       role: 'Relationship Manager',
+      password: 'Relationship#2026!',
       branch: 'Ikoyi Wealth Management Suite',
       status: 'Active',
       mustChangePassword: false,
@@ -128,8 +192,129 @@ let dbState = {
   ],
   clients: [],
   documents: [],
-  sharedFolders: [],
-  sharedFolderFiles: [],
+  sharedFolders: [
+    {
+      id: 'fld-1',
+      name: 'AML Compliance & Regulatory Vault',
+      description: 'Restricted sub-folder for statutory regulatory filings, CBN directives, and AML audit proofs.',
+      createdAt: '2026-07-20 10:00:00',
+      createdBy: 'Super Admin',
+      restrictedRoles: ['Compliance', 'Super Admin'],
+      requireApproval: true,
+      shareToken: 'SF-TOKEN-AML-COMPLIANCE-2026',
+      tokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      tokenDurationHours: 168,
+      isApproved: true,
+      allowUploads: true,
+      accessCount: 12
+    },
+    {
+      id: 'fld-2',
+      name: 'Central Operations Settlement Mandates',
+      description: 'Restricted sub-folder for wire transfer confirmations, escrow releases, and bank settlement slips.',
+      createdAt: '2026-07-21 11:30:00',
+      createdBy: 'Super Admin',
+      restrictedRoles: ['Operations', 'Super Admin'],
+      requireApproval: true,
+      shareToken: 'SF-TOKEN-OPS-SETTLEMENT-2026',
+      tokenExpiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+      tokenDurationHours: 720,
+      isApproved: true,
+      allowUploads: true,
+      accessCount: 28
+    },
+    {
+      id: 'fld-3',
+      name: 'Private Wealth Relationship Desk',
+      description: 'Restricted sub-folder for high-net-worth client wealth statements, passport uploads, and referral letters.',
+      createdAt: '2026-07-22 14:15:00',
+      createdBy: 'Super Admin',
+      restrictedRoles: ['Relationship Manager', 'Super Admin'],
+      requireApproval: false,
+      shareToken: 'SF-TOKEN-WEALTH-DESK-2026',
+      tokenExpiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      tokenDurationHours: 24,
+      isApproved: true,
+      allowUploads: true,
+      accessCount: 45
+    }
+  ],
+  sharedFolderFiles: [
+    {
+      id: 'file-101',
+      folderId: 'fld-1',
+      fileName: 'SEC_CBN_AML_2026_Compliance_Directive.pdf',
+      fileSize: '2.4 MB',
+      fileType: 'application/pdf',
+      uploadDate: '2026-07-21 12:00:00',
+      uploadedBy: 'Compliance Desk',
+      fileUrl: '#',
+      sensitivityLabel: 'Restricted',
+      description: 'Mandatory anti-money laundering regulatory compliance guidance document.'
+    },
+    {
+      id: 'file-102',
+      folderId: 'fld-2',
+      fileName: 'GTBank_Escrow_Wire_Settlement_Schedule_Q3.pdf',
+      fileSize: '1.8 MB',
+      fileType: 'application/pdf',
+      uploadDate: '2026-07-22 15:30:00',
+      uploadedBy: 'Operations Desk',
+      fileUrl: '#',
+      sensitivityLabel: 'Confidential',
+      description: 'Bank wire settlement mandate and client subscription escrow breakdown.'
+    }
+  ],
+  sharedFolderTokens: [
+    {
+      id: 'sft-1',
+      folderId: 'fld-1',
+      token: 'SF-TOKEN-AML-COMPLIANCE-2026',
+      tokenName: 'AML Regulatory Vault Token',
+      expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      durationHours: 168,
+      restrictedRoles: ['Compliance', 'Super Admin'],
+      requireApproval: true,
+      allowUploads: true,
+      maxUses: 0,
+      usesCount: 12,
+      isApproved: true,
+      createdBy: 'Super Admin',
+      createdAt: '2026-07-20 10:00:00'
+    },
+    {
+      id: 'sft-2',
+      folderId: 'fld-2',
+      token: 'SF-TOKEN-OPS-SETTLEMENT-2026',
+      tokenName: 'Operations Settlement Token',
+      expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+      durationHours: 720,
+      restrictedRoles: ['Operations', 'Super Admin'],
+      requireApproval: true,
+      allowUploads: true,
+      maxUses: 0,
+      usesCount: 28,
+      isApproved: true,
+      createdBy: 'Super Admin',
+      createdAt: '2026-07-21 11:30:00'
+    },
+    {
+      id: 'sft-3',
+      folderId: 'fld-3',
+      token: 'SF-TOKEN-WEALTH-DESK-2026',
+      tokenName: 'Private Wealth Access Token',
+      expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      durationHours: 24,
+      restrictedRoles: ['Relationship Manager', 'Super Admin'],
+      requireApproval: false,
+      allowUploads: true,
+      maxUses: 0,
+      usesCount: 45,
+      isApproved: true,
+      createdBy: 'Super Admin',
+      createdAt: '2026-07-22 14:15:00'
+    }
+  ],
   folderAccessRequests: [],
   sharedLinks: [],
   auditLogs: [],
@@ -156,29 +341,51 @@ app.get('/api/health', (_req, res) => {
 // Authentication API
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email) {
-    return res.status(400).json({ success: false, error: 'Email address is required.' });
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Both email address and portal password are required.' });
   }
 
   const cleanEmail = email.trim().toLowerCase();
   
-  // Find matching user or fallback by role alias
-  let user = dbState.users.find(u => u.email.toLowerCase() === cleanEmail);
-  
-  if (!user) {
-    if (cleanEmail.includes('admin')) {
-      user = dbState.users.find(u => u.role === 'Super Admin');
-    } else if (cleanEmail.includes('operation') || cleanEmail.includes('ops')) {
-      user = dbState.users.find(u => u.role === 'Operations');
-    } else if (cleanEmail.includes('compliance') || cleanEmail.includes('audit')) {
-      user = dbState.users.find(u => u.role === 'Compliance');
-    } else if (cleanEmail.includes('rm') || cleanEmail.includes('relation') || cleanEmail.includes('wealth')) {
-      user = dbState.users.find(u => u.role === 'Relationship Manager');
-    }
-  }
+  // Find matching user in user directory
+  const user = dbState.users.find(u => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
-    return res.status(401).json({ success: false, error: 'Invalid user credentials. Account not found in directory.' });
+    // Audit failed attempt
+    dbState.auditLogs.unshift({
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2,6)}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      user: cleanEmail,
+      role: 'Guest',
+      action: 'Failed Login Attempt',
+      target: 'Authentication Gateway',
+      ipAddress: req.ip || '127.0.0.1',
+      browser: req.headers['user-agent'] || 'Browser Workstation',
+      os: 'Enterprise System',
+      device: 'Desktop Workspace',
+      details: `Authentication failed: User account ${cleanEmail} not found in directory.`,
+      status: 'Failed'
+    });
+    return res.status(401).json({ success: false, error: 'Invalid email address or portal password.' });
+  }
+
+  // Validate password
+  if (user.password && user.password !== password) {
+    dbState.auditLogs.unshift({
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2,6)}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      user: user.email,
+      role: user.role,
+      action: 'Failed Login Attempt',
+      target: 'Authentication Gateway',
+      ipAddress: req.ip || '127.0.0.1',
+      browser: req.headers['user-agent'] || 'Browser Workstation',
+      os: 'Enterprise System',
+      device: 'Desktop Workspace',
+      details: `Authentication failed: Incorrect password provided for ${user.email}.`,
+      status: 'Failed'
+    });
+    return res.status(401).json({ success: false, error: 'Invalid email address or portal password.' });
   }
 
   if (user.status === 'Suspended' || user.status === 'Disabled') {
@@ -190,8 +397,15 @@ app.post('/api/auth/login', (req, res) => {
     dbState.activeSessions = dbState.activeSessions.filter(s => s.userId !== user.id);
   }
 
-  const token = `jwt_session_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  const expiresAt = Date.now() + (dbState.settings.maxSessionHours || 8) * 60 * 60 * 1000;
+  const tokenPayload = {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    iat: Date.now(),
+    exp: Date.now() + (dbState.settings.maxSessionHours || 8) * 60 * 60 * 1000
+  };
+  const token = `jwt.${Buffer.from(JSON.stringify(tokenPayload)).toString('base64url')}.${Math.random().toString(36).substring(2, 10)}`;
+  const expiresAt = tokenPayload.exp;
 
   const session = {
     token,
@@ -203,9 +417,12 @@ app.post('/api/auth/login', (req, res) => {
 
   dbState.activeSessions.push(session);
 
+  // Issue HTTP-only authentication cookie
+  res.setHeader('Set-Cookie', `auth_token=${token}; HttpOnly; Path=/; Max-Age=28800; SameSite=Lax`);
+
   // Record Audit Trail
   dbState.auditLogs.unshift({
-    id: `log-${Date.now()}`,
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2,6)}`,
     timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
     user: user.email,
     role: user.role,
@@ -215,16 +432,18 @@ app.post('/api/auth/login', (req, res) => {
     browser: req.headers['user-agent'] || 'Chrome',
     os: 'Enterprise System',
     device: 'Desktop Workspace',
-    details: `Successful portal authentication. Assigned role [${user.role}]. Token generated.`,
+    details: `Successful authenticated sign-in for user ${user.email} (${user.role}). Issued secure JWT in HTTP-only cookie.`,
     status: 'Success'
   });
 
   res.json({
     success: true,
+    message: 'Authentication successful',
     data: {
       token,
       user
-    }
+    },
+    user
   });
 });
 
@@ -694,15 +913,200 @@ app.delete('/api/banking/officers/:id', (req, res) => {
   res.json({ success: true, data: null });
 });
 
-// Shared Folders & Links
+// Shared Folders, Tokens & Links
 app.get('/api/shared-folders', (_req, res) => res.json({ success: true, data: dbState.sharedFolders }));
+
 app.post('/api/shared-folders', (req, res) => {
-  const folder = { id: `folder-${Date.now()}`, shareToken: `fld_${Math.random().toString(36).substring(2)}`, createdAt: new Date().toISOString(), ...req.body };
-  dbState.sharedFolders.push(folder);
-  res.json({ success: true, data: { id: folder.id } });
+  const durationHours = req.body.tokenDurationHours || 168;
+  const tokenExpiresAt = req.body.tokenExpiresAt || (
+    durationHours > 0 ? new Date(Date.now() + durationHours * 3600 * 1000).toISOString() : undefined
+  );
+  const shareToken = req.body.shareToken || `SF-TOKEN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+  const folder = { 
+    id: `folder-${Date.now()}`, 
+    shareToken,
+    tokenExpiresAt,
+    tokenDurationHours: durationHours,
+    createdAt: new Date().toISOString(), 
+    ...req.body 
+  };
+  dbState.sharedFolders.unshift(folder);
+
+  // Store in sharedFolderTokens table state
+  const tokenRecord = {
+    id: `sft-${Date.now()}`,
+    folderId: folder.id,
+    token: shareToken,
+    tokenName: `${folder.name} Primary Token`,
+    expiresAt: tokenExpiresAt,
+    durationHours,
+    restrictedRoles: folder.restrictedRoles || [],
+    requireApproval: folder.requireApproval ?? true,
+    allowUploads: folder.allowUploads ?? true,
+    maxUses: 0,
+    usesCount: 0,
+    isApproved: folder.isApproved ?? true,
+    createdBy: folder.createdBy || 'Super Admin',
+    createdAt: new Date().toISOString()
+  };
+  dbState.sharedFolderTokens.unshift(tokenRecord);
+
+  res.json({ success: true, data: { id: folder.id, shareToken, tokenExpiresAt } });
 });
+
+app.put('/api/shared-folders/:id', (req, res) => {
+  const idx = dbState.sharedFolders.findIndex(f => f.id === req.params.id);
+  if (idx !== -1) {
+    dbState.sharedFolders[idx] = { ...dbState.sharedFolders[idx], ...req.body };
+  }
+  res.json({ success: true, data: null });
+});
+
 app.delete('/api/shared-folders/:id', (req, res) => {
   dbState.sharedFolders = dbState.sharedFolders.filter(f => f.id !== req.params.id);
+  dbState.sharedFolderFiles = dbState.sharedFolderFiles.filter(f => f.folderId !== req.params.id);
+  dbState.sharedFolderTokens = dbState.sharedFolderTokens.filter(t => t.folderId !== req.params.id);
+  res.json({ success: true, data: null });
+});
+
+// Shared Folder Tokens Service
+app.get('/api/shared-folder-tokens', (_req, res) => res.json({ success: true, data: dbState.sharedFolderTokens }));
+
+app.post('/api/shared-folders/:folderId/tokens', (req, res) => {
+  const folderId = req.params.folderId;
+  const folder = dbState.sharedFolders.find(f => f.id === folderId);
+  if (!folder) {
+    return res.status(404).json({ success: false, error: 'Target sub-folder not found.' });
+  }
+
+  const durationHours = req.body.durationHours || 168;
+  const expiresAt = durationHours > 0 ? new Date(Date.now() + durationHours * 3600 * 1000).toISOString() : undefined;
+  const tokenString = req.body.token || `SF-TOKEN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+  const newToken = {
+    id: `sft-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+    folderId,
+    token: tokenString,
+    tokenName: req.body.tokenName || `${folder.name} Access Token`,
+    expiresAt,
+    durationHours,
+    restrictedRoles: req.body.restrictedRoles || folder.restrictedRoles || [],
+    requireApproval: req.body.requireApproval ?? folder.requireApproval ?? true,
+    allowUploads: req.body.allowUploads ?? folder.allowUploads ?? true,
+    maxUses: req.body.maxUses || 0,
+    usesCount: 0,
+    isApproved: req.body.isApproved ?? folder.isApproved ?? true,
+    createdBy: req.body.createdBy || 'Super Admin',
+    createdAt: new Date().toISOString()
+  };
+
+  dbState.sharedFolderTokens.unshift(newToken);
+  folder.shareToken = tokenString;
+  folder.tokenExpiresAt = expiresAt;
+  folder.tokenDurationHours = durationHours;
+
+  res.json({ success: true, data: newToken });
+});
+
+app.post('/api/shared-folders/validate-token', (req, res) => {
+  const { token, folderId } = req.body;
+  if (!token) {
+    return res.status(400).json({ success: false, valid: false, message: 'Access token is required.' });
+  }
+
+  let tokenRecord = dbState.sharedFolderTokens.find(t => t.token === token);
+  let folder = dbState.sharedFolders.find(f => f.shareToken === token || f.id === folderId);
+
+  if (!folder && tokenRecord) {
+    folder = dbState.sharedFolders.find(f => f.id === tokenRecord.folderId);
+  }
+
+  if (!folder) {
+    return res.status(404).json({ success: false, valid: false, message: 'Invalid or removed sub-folder link token.' });
+  }
+
+  const expiresAt = tokenRecord?.expiresAt || folder.tokenExpiresAt;
+  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+    return res.status(403).json({
+      success: false,
+      valid: false,
+      expired: true,
+      expiresAt,
+      message: `Access token expired on ${new Date(expiresAt).toLocaleString()}. Re-authorization required.`
+    });
+  }
+
+  res.json({
+    success: true,
+    valid: true,
+    expired: false,
+    folder,
+    tokenInfo: tokenRecord || {
+      token: folder.shareToken,
+      expiresAt: folder.tokenExpiresAt,
+      allowUploads: folder.allowUploads
+    }
+  });
+});
+
+app.get('/api/shared-folders/:folderId/files', (req, res) => {
+  const folderId = req.params.folderId;
+  const files = folderId === 'all' 
+    ? dbState.sharedFolderFiles 
+    : dbState.sharedFolderFiles.filter(f => f.folderId === folderId);
+  res.json({ success: true, data: files });
+});
+
+app.get('/api/shared-folder-files', (_req, res) => res.json({ success: true, data: dbState.sharedFolderFiles }));
+
+app.post('/api/shared-folder-files', (req, res) => {
+  const { folderId, shareToken, token } = req.body;
+  
+  // Validate token if folderId or token provided
+  if (folderId || shareToken || token) {
+    const targetFolder = dbState.sharedFolders.find(
+      f => f.id === folderId || f.shareToken === (shareToken || token)
+    );
+
+    if (targetFolder && targetFolder.tokenExpiresAt) {
+      const isExpired = new Date(targetFolder.tokenExpiresAt).getTime() < Date.now();
+      if (isExpired) {
+        return res.status(403).json({
+          success: false,
+          error: `Sub-folder access token expired on ${new Date(targetFolder.tokenExpiresAt).toLocaleString()}. File upload rejected by security rules.`
+        });
+      }
+    }
+  }
+
+  const newFile = {
+    id: req.body.id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    folderId: req.body.folderId,
+    fileName: req.body.fileName,
+    fileSize: req.body.fileSize || '1.0 MB',
+    fileType: req.body.fileType || 'application/octet-stream',
+    uploadDate: req.body.uploadDate || new Date().toISOString().replace('T', ' ').substring(0, 19),
+    uploadedBy: req.body.uploadedBy || 'User Upload',
+    fileUrl: req.body.fileUrl || '#',
+    sensitivityLabel: req.body.sensitivityLabel || 'Confidential',
+    description: req.body.description || ''
+  };
+
+  dbState.sharedFolderFiles.unshift(newFile);
+
+  // Update token usage count if matched
+  const matchedToken = dbState.sharedFolderTokens.find(
+    t => t.folderId === req.body.folderId || t.token === (shareToken || token)
+  );
+  if (matchedToken) {
+    matchedToken.usesCount = (matchedToken.usesCount || 0) + 1;
+  }
+
+  res.json({ success: true, data: newFile });
+});
+app.delete('/api/shared-folder-files/:id', (req, res) => {
+  dbState.sharedFolderFiles = dbState.sharedFolderFiles.filter(f => f.id !== req.params.id);
   res.json({ success: true, data: null });
 });
 

@@ -56,6 +56,7 @@ export const SharedFolderVault: React.FC = () => {
   const [newRestrictedRoles, setNewRestrictedRoles] = useState<(RoleType | 'External User')[]>(['Operations']);
   const [newRequireApproval, setNewRequireApproval] = useState(true);
   const [newAllowUploads, setNewAllowUploads] = useState(true);
+  const [newExpirationHours, setNewExpirationHours] = useState<number>(168); // Default 7 days (168 hours)
 
   // File Upload Form State
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState(sharedFolders[0]?.id || '');
@@ -97,13 +98,19 @@ export const SharedFolderVault: React.FC = () => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
 
+    const tokenExpiresAt = newExpirationHours > 0 
+      ? new Date(Date.now() + newExpirationHours * 3600 * 1000).toISOString()
+      : undefined;
+
     const created = createSharedSubFolder({
       name: newFolderName.trim(),
       description: newFolderDesc.trim() || 'Shared sub-folder with restricted access control',
       restrictedRoles: newRestrictedRoles,
       requireApproval: newRequireApproval,
       isApproved: !newRequireApproval, // If require approval is false, auto approve
-      allowUploads: newAllowUploads
+      allowUploads: newAllowUploads,
+      tokenDurationHours: newExpirationHours,
+      tokenExpiresAt
     });
 
     setSelectedFolderId(created.id);
@@ -821,8 +828,30 @@ export const SharedFolderVault: React.FC = () => {
                 </div>
               </div>
 
-              {/* Approval & Upload Toggles */}
+              {/* Approval, Token Duration & Upload Toggles */}
               <div className="space-y-3 pt-2 border-t border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-300 flex items-center justify-between">
+                    <span>Access Token Validity Duration</span>
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  </label>
+                  <select
+                    value={newExpirationHours}
+                    onChange={(e) => setNewExpirationHours(Number(e.target.value))}
+                    className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none font-semibold ${
+                      isDark ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-50 border-slate-300'
+                    }`}
+                  >
+                    <option value={1}>1 Hour (Ultra Security Express)</option>
+                    <option value={12}>12 Hours (Half Day)</option>
+                    <option value={24}>24 Hours (1 Day)</option>
+                    <option value={72}>72 Hours (3 Days)</option>
+                    <option value={168}>7 Days (1 Week - Recommended)</option>
+                    <option value={720}>30 Days (1 Month)</option>
+                    <option value={0}>Unlimited (No Expiration)</option>
+                  </select>
+                </div>
+
                 <label className="flex items-center justify-between text-xs font-bold text-slate-300 cursor-pointer">
                   <span>Require SuperAdmin Approval Before Accessing Link</span>
                   <input

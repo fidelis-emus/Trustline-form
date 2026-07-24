@@ -62,14 +62,45 @@ export const PublicFolderAccess: React.FC<PublicFolderAccessProps> = ({ folderTo
   // Preview Modal
   const [previewFile, setPreviewFile] = useState<SharedFolderFile | null>(null);
 
+  // Check if token has expired
+  const isTokenExpired = Boolean(
+    targetFolder?.tokenExpiresAt && new Date(targetFolder.tokenExpiresAt).getTime() < Date.now()
+  );
+
   if (!targetFolder) {
     return (
       <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl border border-red-500/30 bg-slate-900 text-slate-100 text-center space-y-4 shadow-2xl">
         <ShieldAlert className="w-12 h-12 text-red-400 mx-auto" />
-        <h2 className="text-xl font-extrabold text-red-400">Invalid or Expired Sub-Folder Link</h2>
+        <h2 className="text-xl font-extrabold text-red-400">Invalid Sub-Folder Link</h2>
         <p className="text-xs text-slate-400">
-          The requested sub-folder link token ({folderToken}) is invalid or has been deleted by SuperAdmin.
+          The requested sub-folder access token ({folderToken}) is invalid or has been removed from the database by SuperAdmin.
         </p>
+      </div>
+    );
+  }
+
+  if (isTokenExpired) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl border border-amber-500/40 bg-slate-900 text-slate-100 text-center space-y-4 shadow-2xl">
+        <Clock className="w-14 h-14 text-amber-400 mx-auto animate-pulse" />
+        <div className="space-y-1">
+          <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-extrabold text-[10px] uppercase border border-amber-500/30">
+            ⏳ Sub-Folder Access Token Expired
+          </span>
+          <h2 className="text-2xl font-black text-slate-100 mt-2">{targetFolder.name}</h2>
+        </div>
+        <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
+          The security access token for this sub-folder expired on{' '}
+          <strong className="text-amber-300">{new Date(targetFolder.tokenExpiresAt!).toLocaleString()}</strong>.
+        </p>
+        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-left space-y-2 text-xs text-slate-400">
+          <p className="font-bold text-slate-200">How to regain access:</p>
+          <ul className="list-disc list-inside space-y-1 text-[11px]">
+            <li>Contact TrustLine Capital Compliance or Operations Admin</li>
+            <li>Request a new time-bound token or token validity extension</li>
+            <li>Access will be unlocked once a new token is generated</li>
+          </ul>
+        </div>
       </div>
     );
   }

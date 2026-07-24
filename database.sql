@@ -114,6 +114,25 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     last_login TEXT
 );
 
+-- 7. SHARED FOLDER ACCESS TOKENS TABLE
+CREATE TABLE IF NOT EXISTS shared_folder_tokens (
+    id TEXT PRIMARY KEY,
+    folder_id TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    token_name TEXT,
+    expires_at TEXT,
+    duration_hours INTEGER DEFAULT 168,
+    restricted_roles TEXT DEFAULT '[]',
+    require_approval INTEGER DEFAULT 1,
+    allow_uploads INTEGER DEFAULT 1,
+    max_uses INTEGER DEFAULT 0,
+    uses_count INTEGER DEFAULT 0,
+    is_approved INTEGER DEFAULT 1,
+    created_by TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (folder_id) REFERENCES shared_folders(id) ON DELETE CASCADE
+);
+
 -- INITIAL SEED DATA
 INSERT INTO cms_branding (
     company_name, logo_url, header_title, footer_text, address, phone, email, website, watermark_text, pdf_header, pdf_footer

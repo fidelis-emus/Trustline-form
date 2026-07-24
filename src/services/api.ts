@@ -38,6 +38,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    console.error(`Non-JSON response from ${endpoint}:`, text.substring(0, 150));
+    throw new Error(`Server returned non-JSON response (${response.status} ${response.statusText}).`);
+  }
+
   const resData = await response.json();
 
   if (!response.ok || resData.success === false) {
@@ -241,9 +248,12 @@ export const api = {
   sharedFolders: {
     getAll: (): Promise<SharedFolder[]> => request<SharedFolder[]>('/shared-folders'),
     create: (folder: Partial<SharedFolder>): Promise<{ id: string }> => request<{ id: string }>('/shared-folders', { method: 'POST', body: JSON.stringify(folder) }),
+    update: (id: string, folder: Partial<SharedFolder>): Promise<void> => request<void>(`/shared-folders/${id}`, { method: 'PUT', body: JSON.stringify(folder) }),
     delete: (id: string): Promise<void> => request<void>(`/shared-folders/${id}`, { method: 'DELETE' }),
 
     getFiles: (folderId: string): Promise<SharedFolderFile[]> => request<SharedFolderFile[]>(`/shared-folders/${folderId}/files`),
+    uploadFileRecord: (file: SharedFolderFile): Promise<{ id: string }> => request<{ id: string }>('/shared-folder-files', { method: 'POST', body: JSON.stringify(file) }),
+    deleteFileRecord: (id: string): Promise<void> => request<void>(`/shared-folder-files/${id}`, { method: 'DELETE' }),
     uploadFile: async (folderId: string, file: File, uploadedBy: string, description?: string): Promise<{ id: string; fileUrl: string }> => {
       const formData = new FormData();
       formData.append('file', file);
@@ -267,6 +277,16 @@ export const api = {
     updateAccessRequestStatus: (id: string, status: 'Approved' | 'Rejected', reviewedBy: string): Promise<void> => request<void>(`/folder-access-requests/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status, reviewedBy })
+    }),
+
+    getTokens: (): Promise<any[]> => request<any[]>('/shared-folder-tokens'),
+    generateToken: (folderId: string, params: any): Promise<any> => request<any>(`/shared-folders/${folderId}/tokens`, {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
+    validateToken: (token: string, folderId?: string): Promise<{ valid: boolean; expired?: boolean; message?: string; folder?: SharedFolder }> => request<any>('/shared-folders/validate-token', {
+      method: 'POST',
+      body: JSON.stringify({ token, folderId })
     })
   },
 

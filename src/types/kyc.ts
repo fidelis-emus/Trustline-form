@@ -299,6 +299,10 @@ export interface SharedFolder {
   allowedEmails?: string[];
   requireApproval: boolean;
   shareToken: string;
+  tokenExpiresAt?: string; // Time-bound expiration timestamp (ISO string)
+  tokenDurationHours?: number; // Configured validity period in hours
+  tokenMaxUses?: number;
+  tokenUsesCount?: number;
   isApproved: boolean; // Superadmin approval status for public link access
   allowUploads: boolean; // Allow recipients with link to upload files
   accessCount: number;
