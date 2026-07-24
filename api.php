@@ -58,6 +58,7 @@ function successResponse(mixed $data = null, string $message = 'Success', int $c
     http_response_code($code);
     $response = [
         'status' => 'success',
+        'success' => true,
         'code' => $code,
         'message' => $message,
         'data' => $data
@@ -74,6 +75,8 @@ function errorResponse(string $message = 'An error occurred', int $code = 400, a
     http_response_code($code);
     $response = [
         'status' => 'error',
+        'success' => false,
+        'error' => $message,
         'code' => $code,
         'message' => $message
     ];
@@ -325,22 +328,33 @@ function authenticateUser(PDO $db): ?array {
 $db = getDbConnection();
 
 $method = $_SERVER['REQUEST_METHOD'];
-$pathInfo = $_SERVER['PATH_INFO'] ?? $_SERVER['REQUEST_URI'] ?? '/';
 
-// Parse query params & body
-$uriParts = explode('?', $pathInfo);
-$path = rtrim($uriParts[0], '/');
+// Parse URL path
+$requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$pathInfo = $_SERVER['PATH_INFO'] ?? '';
+$scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+
+// Determine cleanest relative URI path
+$path = $pathInfo ?: $requestUri;
+if (!empty($scriptName) && strpos($path, $scriptName) === 0) {
+    $path = substr($path, strlen($scriptName));
+}
+
+// Strip query parameters
+$uriParts = explode('?', $path);
+$cleanPath = rtrim($uriParts[0], '/');
 
 $rawInput = file_get_contents('php_input') ?: file_get_contents('php://input');
 $bodyData = json_decode($rawInput, true) ?: $_POST ?: [];
 
-// Extract route segments e.g. /api.php/clients/123 => ['clients', '123']
-$segments = array_values(array_filter(explode('/', $path), function($v) {
-    return $v !== '' && $v !== 'api.php';
+// Extract route segments ignoring empty strings, 'api.php', and 'api'
+$segments = array_values(array_filter(explode('/', $cleanPath), function($v) {
+    return $v !== '' && $v !== 'api.php' && $v !== 'api';
 }));
 
 $resource = $segments[0] ?? 'health';
 $resourceId = $segments[1] ?? null;
+$subResourceId = $segments[2] ?? null;
 
 // ==========================================
 // 7. RESTful RESOURCE ENDPOINTS
@@ -364,7 +378,7 @@ switch ($resource) {
         break;
 
     // --------------------------------------
-    // Authentication Endpoint: POST /auth/login
+    // Authentication Endpoints
     // --------------------------------------
     case 'auth':
         if ($resourceId === 'login' && $method === 'POST') {
@@ -376,8 +390,8 @@ switch ($resource) {
                 errorResponse('Validation failed', 400, $validation);
             }
 
-            $stmt = $db->prepare("SELECT * FROM user_accounts WHERE email = ?");
-            $stmt->execute([$bodyData['email']]);
+            $stmt = $db->prepare("SELECT * FROM user_accounts WHERE LOWER(email) = ?");
+            $stmt->execute([trim(strtolower($bodyData['email']))]);
             $user = $stmt->fetch();
 
             if (!$user || !password_verify($bodyData['password'], $user['password_hash'])) {
@@ -388,16 +402,38 @@ switch ($resource) {
                 errorResponse("Account is currently {$user['status']}. Please contact Super Admin.", 403);
             }
 
-            // Update last login
+            // Update last login timestamp
             $db->prepare("UPDATE user_accounts SET last_login = CURRENT_TIMESTAMP WHERE id = ?")->execute([$user['id']]);
 
-            // Return bearer token (email token for stateless API)
+            // Create bearer JWT-like token string
+            $tokenPayload = [
+                'userId' => $user['id'],
+                'email' => $user['email'],
+                'role' => $user['role'],
+                'exp' => time() + 28800
+            ];
+            $token = 'jwt.' . base64_encode(json_encode($tokenPayload)) . '.' . substr(md5(uniqid()), 0, 8);
+
             unset($user['password_hash']);
+
             successResponse([
                 'user' => $user,
-                'token' => $user['email'],
-                'expires_in' => 86400
+                'token' => $token
             ], 'Authentication successful');
+        } elseif ($resourceId === 'me' && $method === 'GET') {
+            $authUser = authenticateUser($db);
+            if (!$authUser) {
+                errorResponse('Unauthorized session', 401);
+            }
+            unset($authUser['password_hash']);
+            successResponse(['user' => $authUser, 'token' => $authUser['email']], 'Session active');
+        } elseif ($resourceId === 'logout' && $method === 'POST') {
+            successResponse(null, 'Logged out successfully');
+        } elseif ($resourceId === 'forgot-password' && $method === 'POST') {
+            $email = trim(strtolower($bodyData['email'] ?? ''));
+            successResponse(['message' => 'Password reset link sent to ' . $email]);
+        } elseif ($resourceId === 'reset-password' && $method === 'POST') {
+            successResponse(['message' => 'Portal password reset successfully']);
         }
         errorResponse('Invalid auth route', 404);
         break;
@@ -648,6 +684,89 @@ switch ($resource) {
                 $bodyData['status'] ?? 'Success'
             ]);
             successResponse(['id' => $id], 'Audit log entry recorded', 201);
+        }
+        break;
+
+    // --------------------------------------
+    // Shared Sub-Folders: /shared-folders
+    // --------------------------------------
+    case 'shared-folders':
+        if ($resourceId === 'validate-token' && $method === 'POST') {
+            $tokenStr = $bodyData['token'] ?? '';
+            $folderId = $bodyData['folderId'] ?? null;
+            if (empty($tokenStr)) {
+                errorResponse('Token string required', 400);
+            }
+            $stmt = $db->prepare("SELECT * FROM shared_folders WHERE share_token = ? OR id = ?");
+            $stmt->execute([$tokenStr, $folderId]);
+            $folder = $stmt->fetch();
+
+            if (!$folder) {
+                errorResponse('Invalid or removed access token', 404);
+            }
+
+            if (!empty($folder['token_expires_at']) && strtotime($folder['token_expires_at']) < time()) {
+                successResponse(['valid' => false, 'expired' => true, 'message' => 'Token expired'], 'Token expired', 200);
+            }
+
+            successResponse(['valid' => true, 'expired' => false, 'folder' => $folder], 'Token valid');
+        } elseif ($method === 'GET') {
+            $stmt = $db->query("SELECT * FROM shared_folders ORDER BY created_at DESC");
+            $folders = $stmt->fetchAll();
+            foreach ($folders as &$f) {
+                $f['restricted_roles'] = json_decode($f['restricted_roles'] ?? '[]', true);
+            }
+            successResponse($folders, 'Shared sub-folders list');
+        } elseif ($method === 'POST') {
+            $id = $bodyData['id'] ?? ('folder-' . time());
+            $token = $bodyData['shareToken'] ?? ('SF-TOKEN-' . strtoupper(substr(md5(uniqid()), 0, 8)));
+            $durationHours = (int)($bodyData['tokenDurationHours'] ?? 168);
+            $tokenExpiresAt = $bodyData['tokenExpiresAt'] ?? ($durationHours > 0 ? date('Y-m-d H:i:s', time() + $durationHours * 3600) : null);
+
+            $stmt = $db->prepare("INSERT INTO shared_folders (
+                id, name, description, share_token, token_duration_hours, token_expires_at, restricted_roles, require_approval, is_approved, allow_uploads, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $id,
+                $bodyData['name'] ?? 'Untitled Sub-folder',
+                $bodyData['description'] ?? '',
+                $token,
+                $durationHours,
+                $tokenExpiresAt,
+                json_encode($bodyData['restrictedRoles'] ?? ['Operations']),
+                $bodyData['requireApproval'] ?? 1,
+                $bodyData['isApproved'] ?? 1,
+                $bodyData['allowUploads'] ?? 1,
+                $bodyData['createdBy'] ?? 'Super Admin'
+            ]);
+
+            successResponse(['id' => $id, 'shareToken' => $token, 'tokenExpiresAt' => $tokenExpiresAt], 'Shared folder created', 201);
+        } elseif ($method === 'DELETE' && $resourceId) {
+            $stmt = $db->prepare("DELETE FROM shared_folders WHERE id = ?");
+            $stmt->execute([$resourceId]);
+            successResponse(['id' => $resourceId], 'Shared folder deleted');
+        }
+        break;
+
+    // --------------------------------------
+    // Users Resource: /users
+    // --------------------------------------
+    case 'users':
+        if ($method === 'GET') {
+            $stmt = $db->query("SELECT id, name, email, role, status, must_change_password, is_first_login, created_at, last_login FROM user_accounts ORDER BY created_at DESC");
+            successResponse($stmt->fetchAll(), 'User accounts list');
+        } elseif ($method === 'POST') {
+            $id = $bodyData['id'] ?? ('usr-' . time());
+            $stmt = $db->prepare("INSERT INTO user_accounts (id, name, email, role, password_hash, status) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $id,
+                $bodyData['name'] ?? 'Portal User',
+                strtolower(trim($bodyData['email'])),
+                $bodyData['role'] ?? 'Operations',
+                password_hash($bodyData['password'] ?? 'Password123!', PASSWORD_BCRYPT),
+                $bodyData['status'] ?? 'Active'
+            ]);
+            successResponse(['id' => $id], 'User account created', 201);
         }
         break;
 

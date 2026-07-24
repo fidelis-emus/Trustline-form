@@ -19,9 +19,13 @@
     RewriteRule ^storage/.*\.log$ - [F,L]
 
     # Route API requests to api.php
+    RewriteRule ^api/(.*)$ api.php/$1 [QSA,L]
+    RewriteRule ^api$ api.php [QSA,L]
+
+    # SPA Fallback routing for React Frontend
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^api/(.*)$ api.php/$1 [QSA,L]
+    RewriteRule ^ index.html [L]
 </IfModule>
 
 # Options
